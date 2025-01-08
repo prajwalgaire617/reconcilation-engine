@@ -75,11 +75,13 @@ class BaseService(ABC):
 
 
 def wait_for_mutation(client_mutation_id):
-    mutation = MutationLog(client_mutation_id=client_mutation_id)
+    mutation = MutationLog.objects.filter(
+        client_mutation_id=client_mutation_id
+    ).first()
     if not mutation:
         return
     loop_count = 0
     while mutation.status == MutationLog.RECEIVED and loop_count<10:
         asyncio.sleep(0.3)
-        loop_count+= 1
+        loop_count += 1
     return
