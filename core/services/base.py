@@ -7,7 +7,7 @@ from core.models import HistoryModel, MutationLog
 from core.services.utils import check_authentication as check_authentication, output_exception, \
     model_representation, output_result_success, build_delete_instance_payload
 from core.validation.base import BaseModelValidation
-from core.utils import json_serialize_value
+from core.utils import to_json_safe_value
 
 
 class BaseService(ABC):
@@ -77,7 +77,7 @@ class BaseService(ABC):
         if isinstance(json_ext, dict):
             for key, value in payload_data.items():
                 if key in json_ext and json_ext[key] != value:
-                    json_ext[key] = json_serialize_value(value)
+                    json_ext[key] = to_json_safe_value(value)
 
     def _base_payload_adjust(self, obj_data):
         return obj_data

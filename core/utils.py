@@ -366,7 +366,7 @@ def validate_json_schema(schema):
         ]
 
 
-def json_serialize_value(value):
+def to_json_safe_value(value):
     try:
         json.dumps(value)
         return value
