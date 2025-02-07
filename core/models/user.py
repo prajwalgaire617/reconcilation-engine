@@ -130,6 +130,9 @@ class Role(VersionedModel):
     audit_user_id = models.IntegerField(
         db_column='AuditUserID', blank=True, null=True)
 
+    def natural_key(self):
+        return (self.name,)
+
     @classmethod
     def get_queryset(cls, queryset, user):
         if isinstance(user, ResolveInfo):
@@ -148,7 +151,7 @@ class Role(VersionedModel):
 class RoleRight(VersionedModel):
     id = models.AutoField(db_column='RoleRightID', primary_key=True)
     role = models.ForeignKey(Role, models.DO_NOTHING,
-                             db_column='RoleID', related_name="rights")
+                             db_column='RoleID', related_name="rights", to_field="name")
     right_id = models.IntegerField(db_column='RightID')
     audit_user_id = models.IntegerField(
         db_column='AuditUserId', blank=True, null=True)
