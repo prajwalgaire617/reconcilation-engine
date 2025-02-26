@@ -73,6 +73,7 @@ class AdminLogoutMiddleware:
     """
     Middleware to clear all user sessions when they log out from Django Admin.
     """
+    LOGOUT_URL = f"/{settings.SITE_ROOT()}admin/logout/"
 
     def __init__(self, get_response):
         self.get_response = get_response
@@ -80,7 +81,7 @@ class AdminLogoutMiddleware:
     def __call__(self, request):
         response = self.get_response(request)
 
-        if request.path.startswith("/api/admin/logout/"):
+        if request.path.startswith(self.LOGOUT_URL):
             response.delete_cookie('JWT')
             logger.info(f"Cleared all sessions after admin panel logout")
 
