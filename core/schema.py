@@ -6,6 +6,7 @@ import sys
 import uuid
 
 import graphene
+from django.http import JsonResponse
 from django.utils.translation import gettext as _
 from copy import copy
 from datetime import datetime as py_datetime
@@ -14,12 +15,14 @@ from graphene_django import DjangoObjectType
 from functools import partial
 from promise import Promise
 
-from functools import reduce
+from functools import reduce, wraps
 from django.utils.translation import gettext_lazy
 from graphql.error import GraphQLError
 from graphene.types.generic import GenericScalar
 from graphql_jwt.mutations import JSONWebTokenMutation, mixins
+from django.http.response import HttpResponseForbidden
 import graphene_django_optimizer as gql_optimizer
+from graphene_django.views import HttpError
 from core.services import (
     create_or_update_interactive_user,
     create_or_update_core_user,
@@ -38,13 +41,13 @@ from django import dispatch
 from django.conf import settings
 from django.core.cache import cache
 from django.contrib.auth.models import AnonymousUser
-from django.core.exceptions import PermissionDenied, ValidationError, PermissionDenied
+from django.core.exceptions import ValidationError, PermissionDenied
 from django.core.serializers.json import DjangoJSONEncoder
 from django.db import IntegrityError, transaction
 from django.db.models import Q, Count
 from django.db.models.expressions import RawSQL
 from django.http import HttpRequest
-from django.middleware.csrf import CsrfViewMiddleware
+from django.middleware.csrf import CsrfViewMiddleware, get_token
 from django.utils import translation
 from django.utils.timezone import now
 from graphene.utils.str_converters import to_snake_case, to_camel_case
@@ -272,6 +275,13 @@ class OpenIMISMutation(graphene.relay.ClientIDMutation):
 
     @classmethod
     def mutate_and_get_payload(cls, root, info, **data):
+        request = getattr(info, "context", None)
+
+        csrf_token = request.headers.get("X-CSRFToken")
+        stored_token = cache.get(f"csrf_token_{request.user.id}")
+        if not csrf_token or csrf_token != stored_token:
+            raise HttpError(HttpResponseForbidden((_("Forbidden: Invalid CSRF token."))))
+
         mutation_log = MutationLog.objects.create(
             json_content=json.dumps(data, cls=OpenIMISJSONEncoder),
             user_id=info.context.user.id if info.context.user else None,
@@ -508,8 +518,16 @@ class OrderedDjangoFilterConnectionField(DjangoFilterConnectionField):
     def resolve_queryset(
             cls, connection, iterable, info, args, filtering_args, filterset_class
     ):
+        request = getattr(info, "context", None)
+
+        csrf_token = request.headers.get("X-CSRFToken")
+        stored_token = cache.get(f"csrf_token_{request.user.id}")
+        if not csrf_token or csrf_token != stored_token:
+            raise HttpError(HttpResponseForbidden((_("Forbidden: Invalid CSRF token."))))
+
         if not info.context.user.is_authenticated:
             raise PermissionDenied(_("unauthorized"))
+
         qs = super(DjangoFilterConnectionField, cls).resolve_queryset(
             connection, iterable, info, args
         )
@@ -1755,6 +1773,8 @@ class SetPasswordMutation(graphene.relay.ClientIDMutation):
 class OpenimisObtainJSONWebToken(mixins.ResolveMixin, JSONWebTokenMutation):
     """Obtain JSON Web Token mutation, with auto-provisioning from tblUsers """
 
+    csrf_token = graphene.String()
+
     @classmethod
     def mutate(cls, root, info, **kwargs):
 
@@ -1762,15 +1782,17 @@ class OpenimisObtainJSONWebToken(mixins.ResolveMixin, JSONWebTokenMutation):
         password = kwargs.get("password")
         request = info.context
 
-        if CoreConfig.csrf_protect_login:
-            csrf_middleware = CsrfViewMiddleware(lambda req: None)
-            reason = csrf_middleware.process_view(request, None, (), {})
-            if reason:
-                raise PermissionDenied('CSRF token missing or incorrect.')
-
         check_lockout(request)
         info.context.user = user_authentication(request, username, password)
-        return super().mutate(cls, info, **kwargs)
+
+        csrf_token = get_token(request)
+        if info.context.user:
+            cache.set(f"csrf_token_{info.context.user.id}", csrf_token, timeout=None)
+        jwt_response = super().mutate(cls, info, **kwargs)
+        jwt_response_data = jwt_response.__dict__
+        jwt_response_data["csrf_token"] = csrf_token
+
+        return cls(**jwt_response_data)
 
 
 class Mutation(graphene.ObjectType):
