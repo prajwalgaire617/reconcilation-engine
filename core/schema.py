@@ -1782,6 +1782,12 @@ class OpenimisObtainJSONWebToken(mixins.ResolveMixin, JSONWebTokenMutation):
         password = kwargs.get("password")
         request = info.context
 
+        if CoreConfig.csrf_protect_login:
+            csrf_middleware = CsrfViewMiddleware(lambda req: None)
+            reason = csrf_middleware.process_view(request, None, (), {})
+            if reason:
+                raise PermissionDenied('CSRF token missing or incorrect.')
+
         check_lockout(request)
         info.context.user = user_authentication(request, username, password)
 
