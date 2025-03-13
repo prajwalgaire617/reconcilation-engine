@@ -280,7 +280,9 @@ class OpenIMISMutation(graphene.relay.ClientIDMutation):
         csrf_token = request.headers.get("X-CSRFToken")
         stored_token = cache.get(f"csrf_token_{request.user.id}")
         if not csrf_token or csrf_token != stored_token:
-            raise HttpError(HttpResponseForbidden((_("Forbidden: Invalid CSRF token."))))
+            response = HttpResponseForbidden(_("Forbidden: Invalid CSRF token."))
+            response.delete_cookie('JWT')
+            raise HttpError(response)
 
         mutation_log = MutationLog.objects.create(
             json_content=json.dumps(data, cls=OpenIMISJSONEncoder),
@@ -523,7 +525,9 @@ class OrderedDjangoFilterConnectionField(DjangoFilterConnectionField):
         csrf_token = request.headers.get("X-CSRFToken")
         stored_token = cache.get(f"csrf_token_{request.user.id}")
         if not csrf_token or csrf_token != stored_token:
-            raise HttpError(HttpResponseForbidden((_("Forbidden: Invalid CSRF token."))))
+            response = HttpResponseForbidden(_("Forbidden: Invalid CSRF token."))
+            response.delete_cookie('JWT')
+            raise HttpError(response)
 
         if not info.context.user.is_authenticated:
             raise PermissionDenied(_("unauthorized"))
@@ -1781,12 +1785,6 @@ class OpenimisObtainJSONWebToken(mixins.ResolveMixin, JSONWebTokenMutation):
         username = kwargs.get("username")
         password = kwargs.get("password")
         request = info.context
-
-        if CoreConfig.csrf_protect_login:
-            csrf_middleware = CsrfViewMiddleware(lambda req: None)
-            reason = csrf_middleware.process_view(request, None, (), {})
-            if reason:
-                raise PermissionDenied('CSRF token missing or incorrect.')
 
         check_lockout(request)
         info.context.user = user_authentication(request, username, password)
