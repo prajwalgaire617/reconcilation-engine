@@ -73,6 +73,7 @@ from core.serializers import InteractiveUserSerializer
 
 MAX_SMALLINT = 32767
 MIN_SMALLINT = -32768
+EXPECTED_REQUESTED_WITH = 'webapp'
 
 core = sys.modules["core"]
 
@@ -278,10 +279,12 @@ class OpenIMISMutation(graphene.relay.ClientIDMutation):
         request = getattr(info, "context", None)
 
         csrf_token = request.headers.get("X-CSRFToken")
+        requested_with = request.headers.get("X-Requested-With")
         stored_token = cache.get(f"csrf_token_{request.user.id}")
-        if not csrf_token or csrf_token != stored_token:
-            response = HttpResponseForbidden(_("Forbidden: Invalid CSRF token."))
-            raise HttpError(response)
+        if requested_with == EXPECTED_REQUESTED_WITH:
+            if not csrf_token or csrf_token != stored_token:
+                response = HttpResponseForbidden(_("Forbidden: Invalid CSRF token."))
+                raise HttpError(response)
 
         mutation_log = MutationLog.objects.create(
             json_content=json.dumps(data, cls=OpenIMISJSONEncoder),
@@ -522,10 +525,12 @@ class OrderedDjangoFilterConnectionField(DjangoFilterConnectionField):
         request = getattr(info, "context", None)
 
         csrf_token = request.headers.get("X-CSRFToken")
+        requested_with = request.headers.get("X-Requested-With")
         stored_token = cache.get(f"csrf_token_{request.user.id}")
-        if not csrf_token or csrf_token != stored_token:
-            response = HttpResponseForbidden(_("Forbidden: Invalid CSRF token."))
-            raise HttpError(response)
+        if requested_with == EXPECTED_REQUESTED_WITH:
+            if not csrf_token or csrf_token != stored_token:
+                response = HttpResponseForbidden(_("Forbidden: Invalid CSRF token."))
+                raise HttpError(response)
 
         if not info.context.user.is_authenticated:
             raise PermissionDenied(_("unauthorized"))
