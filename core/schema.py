@@ -20,6 +20,7 @@ from django.utils.translation import gettext_lazy
 from graphql.error import GraphQLError
 from graphene.types.generic import GenericScalar
 from graphql_jwt.mutations import JSONWebTokenMutation, mixins
+from graphql_jwt.decorators import login_required
 from django.http.response import HttpResponseForbidden
 import graphene_django_optimizer as gql_optimizer
 from graphene_django.views import HttpError
@@ -278,13 +279,11 @@ class OpenIMISMutation(graphene.relay.ClientIDMutation):
     def mutate_and_get_payload(cls, root, info, **data):
         request = getattr(info, "context", None)
 
-        csrf_token = request.headers.get("X-CSRFToken")
-        requested_with = request.headers.get("X-Requested-With")
-        stored_token = cache.get(f"csrf_token_{request.user.id}")
-        if requested_with == WEBAPP_EXPECTED_REQUESTED_WITH:
-            if not csrf_token or csrf_token != stored_token:
-                response = HttpResponseForbidden(_("Forbidden: Invalid CSRF token."))
-                raise HttpError(response)
+        if CoreConfig.csrf_protect_login:
+            csrf_middleware = CsrfViewMiddleware(lambda req: None)
+            reason = csrf_middleware.process_view(request, None, (), {})
+            if reason:
+                raise PermissionDenied('CSRF token missing or incorrect.')
 
         mutation_log = MutationLog.objects.create(
             json_content=json.dumps(data, cls=OpenIMISJSONEncoder),
@@ -524,13 +523,11 @@ class OrderedDjangoFilterConnectionField(DjangoFilterConnectionField):
     ):
         request = getattr(info, "context", None)
 
-        csrf_token = request.headers.get("X-CSRFToken")
-        requested_with = request.headers.get("X-Requested-With")
-        stored_token = cache.get(f"csrf_token_{request.user.id}")
-        if requested_with == WEBAPP_EXPECTED_REQUESTED_WITH:
-            if not csrf_token or csrf_token != stored_token:
-                response = HttpResponseForbidden(_("Forbidden: Invalid CSRF token."))
-                raise HttpError(response)
+        if CoreConfig.csrf_protect_login:
+            csrf_middleware = CsrfViewMiddleware(lambda req: None)
+            reason = csrf_middleware.process_view(request, None, (), {})
+            if reason:
+                raise PermissionDenied('CSRF token missing or incorrect.')
 
         if not info.context.user.is_authenticated:
             raise PermissionDenied(_("unauthorized"))
@@ -1780,8 +1777,6 @@ class SetPasswordMutation(graphene.relay.ClientIDMutation):
 class OpenimisObtainJSONWebToken(mixins.ResolveMixin, JSONWebTokenMutation):
     """Obtain JSON Web Token mutation, with auto-provisioning from tblUsers """
 
-    csrf_token = graphene.String()
-
     @classmethod
     def mutate(cls, root, info, **kwargs):
 
@@ -1791,15 +1786,20 @@ class OpenimisObtainJSONWebToken(mixins.ResolveMixin, JSONWebTokenMutation):
 
         check_lockout(request)
         info.context.user = user_authentication(request, username, password)
+        return super().mutate(cls, info, **kwargs)
 
-        csrf_token = get_token(request)
-        if info.context.user:
-            cache.set(f"csrf_token_{info.context.user.id}", csrf_token, timeout=None)
-        jwt_response = super().mutate(cls, info, **kwargs)
-        jwt_response_data = jwt_response.__dict__
-        jwt_response_data["csrf_token"] = csrf_token
 
-        return cls(**jwt_response_data)
+class GetCsrfTokenMutation(graphene.Mutation):
+    csrf_token = graphene.String()
+
+    @classmethod
+    @login_required
+    def mutate(cls, root, info):
+        csrf_token = get_token(info.context)
+        if not csrf_token:
+            raise GraphQLError("CSRF token could not be generated")
+
+        return GetCsrfTokenMutation(csrf_token=csrf_token)
 
 
 class Mutation(graphene.ObjectType):
@@ -1824,6 +1824,7 @@ class Mutation(graphene.ObjectType):
 
     delete_token_cookie = graphql_jwt.DeleteJSONWebTokenCookie.Field()
     delete_refresh_token_cookie = graphql_jwt.DeleteRefreshTokenCookie.Field()
+    get_csrf_token = GetCsrfTokenMutation.Field()
 
 
 def on_role_mutation(sender, **kwargs):
