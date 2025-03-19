@@ -279,11 +279,12 @@ class OpenIMISMutation(graphene.relay.ClientIDMutation):
     def mutate_and_get_payload(cls, root, info, **data):
         request = getattr(info, "context", None)
 
-        if CoreConfig.csrf_protect_login:
+        user_agent = request.headers.get("User-Agent", "")
+        if not any(bypass in user_agent for bypass in getattr(settings, "USER_AGENT_CSRF_BYPASS", [])):
             csrf_middleware = CsrfViewMiddleware(lambda req: None)
             reason = csrf_middleware.process_view(request, None, (), {})
             if reason:
-                raise PermissionDenied('CSRF token missing or incorrect.')
+                raise PermissionDenied("CSRF token missing or incorrect.")
 
         mutation_log = MutationLog.objects.create(
             json_content=json.dumps(data, cls=OpenIMISJSONEncoder),
@@ -523,14 +524,15 @@ class OrderedDjangoFilterConnectionField(DjangoFilterConnectionField):
     ):
         request = getattr(info, "context", None)
 
-        if CoreConfig.csrf_protect_login:
+        if not info.context.user.is_authenticated:
+            raise PermissionDenied(_("unauthorized"))
+
+        user_agent = request.headers.get("User-Agent", "")
+        if not any(bypass in user_agent for bypass in getattr(settings, "USER_AGENT_CSRF_BYPASS", [])):
             csrf_middleware = CsrfViewMiddleware(lambda req: None)
             reason = csrf_middleware.process_view(request, None, (), {})
             if reason:
-                raise PermissionDenied('CSRF token missing or incorrect.')
-
-        if not info.context.user.is_authenticated:
-            raise PermissionDenied(_("unauthorized"))
+                raise PermissionDenied("CSRF token missing or incorrect.")
 
         qs = super(DjangoFilterConnectionField, cls).resolve_queryset(
             connection, iterable, info, args
