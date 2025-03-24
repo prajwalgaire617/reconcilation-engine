@@ -485,3 +485,10 @@ class ConfigUtilMixin:
                 function_name,
                 str(e),
             )
+
+from django.core.cache import cache
+def clear_cache(instance):
+    cache.delete(get_cache_key(instance))
+
+def get_cache_key(instance):
+    return f"cs_{instance.__class__.__name__}_{instance.id}"

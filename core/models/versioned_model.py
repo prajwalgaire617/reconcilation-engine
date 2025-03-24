@@ -11,6 +11,7 @@ import datetime
 
 logger = logging.getLogger(__name__)
 
+
 class BaseVersionedModel(models.Model):
     validity_from = DateTimeField(db_column='ValidityFrom', default=py_datetime.now)
     validity_to = DateTimeField(db_column='ValidityTo', blank=True, null=True)
@@ -48,6 +49,21 @@ class BaseVersionedModel(models.Model):
 class VersionedModel(BaseVersionedModel):
     legacy_id = models.IntegerField(
         db_column='LegacyID', blank=True, null=True)
+
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        from core.serializers import CachedModelSerializer
+        CachedModelSerializer().clear_cache(self)
+
+    def update(self, *args, **kwargs):
+        super().update(*args, **kwargs)
+        from core.serializers import CachedModelSerializer
+        CachedModelSerializer().clear_cache(self)
+
+    def delete(self, *args, **kwargs):
+        super().delete(*args, **kwargs)
+        from core.serializers import CachedModelSerializer
+        CachedModelSerializer().clear_cache(self)
 
     class Meta:
         abstract = True

@@ -1661,10 +1661,7 @@ def change_user_language(user, language_id):
     try:
         updated_user = User.objects.get(id=user.id)
         updated_user.i_user.language_id = language_id
-        updated_user.save()
-        cache_key = InteractiveUserSerializer().get_cache_key(updated_user.i_user)
-        logger.debug("[OpenIMISMutation] Deleting cache for user with cache key: %s", cache_key)
-        cache.delete(cache_key)
+        updated_user.i_user.save()
     except Exception as exc:
         logger.error("[OpenIMISMutation] Failed to change user language for user %s: %s", user.id, str(exc))
         raise

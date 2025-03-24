@@ -6,6 +6,7 @@ from django.utils.decorators import method_decorator
 from django.views.decorators.cache import cache_page
 from django.core.cache import cache
 
+
 class CachedModelSerializer(serializers.ModelSerializer):
     cache_ttl = None  # Default cache TTL (infinites)
 
@@ -19,6 +20,9 @@ class CachedModelSerializer(serializers.ModelSerializer):
         representation = super().to_representation(instance)
         cache.set(cache_key, representation, self.cache_ttl)
         return representation
+
+    def clear_cache(self, instance):
+        cache.delete(self.get_cache_key(instance))
 
     def get_cache_key(self, instance):
         return f"cs_{self.__class__.__name__}_{instance.id}"
