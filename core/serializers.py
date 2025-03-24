@@ -2,8 +2,6 @@ from rest_framework import serializers
 
 from .apps import CoreConfig
 from .models import User, InteractiveUser, TechnicalUser
-from django.utils.decorators import method_decorator
-from django.views.decorators.cache import cache_page
 from django.core.cache import cache
 from core.utils import get_cache_key
 
@@ -12,7 +10,7 @@ class CachedModelSerializer(serializers.ModelSerializer):
     cache_ttl = None  # Default cache TTL (infinites)
 
     def to_representation(self, instance):
-        cache_key = get_cache_key(instance.__clas)
+        cache_key = get_cache_key(instance.__class__, instance.id)
         cached_data = cache.get(cache_key)
 
         if cached_data is not None:
