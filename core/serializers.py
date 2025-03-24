@@ -5,30 +5,25 @@ from .models import User, InteractiveUser, TechnicalUser
 from django.utils.decorators import method_decorator
 from django.views.decorators.cache import cache_page
 from django.core.cache import cache
+from core.utils import get_cache_key
 
 
 class CachedModelSerializer(serializers.ModelSerializer):
     cache_ttl = None  # Default cache TTL (infinites)
 
     def to_representation(self, instance):
-        cache_key = self.get_cache_key(instance)
+        cache_key = get_cache_key(instance.__clas)
         cached_data = cache.get(cache_key)
 
         if cached_data is not None:
-            return cached_data
+            instance = cached_data
 
         representation = super().to_representation(instance)
         cache.set(cache_key, representation, self.cache_ttl)
         return representation
 
-    def clear_cache(self, instance):
-        cache.delete(self.get_cache_key(instance))
 
-    def get_cache_key(self, instance):
-        return f"cs_{self.__class__.__name__}_{instance.id}"
-
-
-class InteractiveUserSerializer(CachedModelSerializer):
+class InteractiveUserSerializer(serializers.ModelSerializer):
     language = serializers.PrimaryKeyRelatedField(many=False, read_only=True)
     has_password = serializers.SerializerMethodField()
 
