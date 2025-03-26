@@ -2,14 +2,18 @@ import uuid
 from copy import copy
 from datetime import datetime as py_datetime
 from django.db import models
-#from core.datetimes.ad_datetime import datetime as py_datetime
+from django.core.cache import cache
 
+from core.utils import (
+    clear_cache,
+    get_cache_key
+)
 from ..fields import DateTimeField
 from ..utils import filter_validity
 import logging
-import datetime
 
 logger = logging.getLogger(__name__)
+
 
 class BaseVersionedModel(models.Model):
     validity_from = DateTimeField(db_column='ValidityFrom', default=py_datetime.now)
@@ -45,9 +49,44 @@ class BaseVersionedModel(models.Model):
         return queryset
 
 
+class CachedManager(models.Manager):
+    def get(self, *args, **kwargs):
+        pk = None
+        if 'pk' in kwargs:
+            pk = kwargs['pk']
+        if 'id' in kwargs:
+            pk = kwargs['id']
+        if pk:
+            cache_key = get_cache_key(self.model, pk)
+            cached_instance = cache.get(cache_key)
+            if cached_instance is not None:
+                return cached_instance
+
+        instance = super().get(*args, **kwargs)
+        if instance.pk:
+            cache_key = get_cache_key(self.model, instance.pk)
+            cache.set(cache_key, instance, timeout=18000)
+
+        return instance
+
+
 class VersionedModel(BaseVersionedModel):
     legacy_id = models.IntegerField(
         db_column='LegacyID', blank=True, null=True)
+
+    objects = CachedManager()
+
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        cache.set(get_cache_key(self.__class__, self.id), self,  timeout=18000)
+
+    def update(self, *args, **kwargs):
+        super().update(*args, **kwargs)
+        cache.set(get_cache_key(self.__class__, self.id), self,  timeout=18000)
+
+    def delete(self, *args, **kwargs):
+        super().delete(*args, **kwargs)
+        clear_cache(self)
 
     class Meta:
         abstract = True
