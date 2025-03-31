@@ -7,6 +7,9 @@ from graphene import Schema
 from graphene.test import Client
 import datetime
 import time
+from django.test import RequestFactory
+from django.middleware.csrf import get_token
+from rest_framework.request import Request as DRFRequest
 
 logger = logging.getLogger(__name__)
 
@@ -16,8 +19,72 @@ class openIMISGraphQLTestCase(GraphQLTestCase):
     GRAPHQL_SCHEMA = True
 
     class BaseTestContext:
-        def __init__(self, user):
-            self.user = user
+        def __init__(self, user=None, method="GET", path="/", data=None, headers=None):
+            """
+            Initialize a test context with realistic request attributes.
+            
+            Args:
+                user: User instance (authenticated or None for anonymous).
+                method: HTTP method (e.g., "GET", "POST").
+                path: URL path (e.g., "/api/endpoint/").
+                data: Request payload (dict for POST/PUT, None for GET).
+                headers: Custom HTTP headers (dict).
+            """
+            # Default to AnonymousUser if no user provided
+            self.user = user if user is not None else AnonymousUser()
+            
+            # Initialize request factory
+            self.factory = RequestFactory()
+            
+            # Set HTTP method (uppercase for consistency)
+            self.method = method.upper()
+            
+            # Create a base request object
+            self.request = self.factory.generic(
+                method=self.method,
+                path=path,
+                data=data or {},
+                content_type="application/json"
+            )
+            
+            # Set user on the request
+            self.request.user = self.user
+            
+            # META dictionary for headers and server info
+            self.META = self.request.META
+            self.META["REQUEST_METHOD"] = self.method
+            self.META["PATH_INFO"] = path
+            self.META["SERVER_NAME"] = "testserver"  # Required for URL resolution
+            self.META["SERVER_PORT"] = "80"
+            
+            # Add CSRF token if needed (for POST/PUT with session auth)
+            if self.method in ["POST", "PUT", "PATCH"]:
+                self.META["CSRF_COOKIE"] = get_token(self.request)
+                self.request.CSRF_TOKEN = self.META["CSRF_COOKIE"]
+            
+            # Add CORS-related headers (customize as per your CORS setup)
+            self.META["HTTP_ORIGIN"] = "http://testclient.com"
+            self.META["HTTP_ACCESS_CONTROL_REQUEST_METHOD"] = self.method
+            
+            # Add custom headers if provided
+            if headers:
+                for key, value in headers.items():
+                    # Convert to HTTP_* format for Django META
+                    meta_key = f"HTTP_{key.upper().replace('-', '_')}"
+                    self.META[meta_key] = value
+            
+            # Wrap request for Django REST Framework compatibility
+            if hasattr(self, "drf_request"):
+                self.drf_request = DRFRequest(self.request)
+
+        def update_meta(self, key, value):
+            """Utility method to update META dictionary."""
+            self.META[key] = value
+            self.request.META = self.META
+
+        def get_request(self):
+            """Return the constructed request object."""
+            return self.request
     # client = None
     @classmethod
     def setUpClass(cls):
