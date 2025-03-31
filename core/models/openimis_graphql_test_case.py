@@ -9,16 +9,13 @@ import datetime
 import time
 from django.test import RequestFactory
 from django.middleware.csrf import get_token
+from graphql_jwt.shortcuts import get_token as get_token_jwt
 from rest_framework.request import Request as DRFRequest
 
 logger = logging.getLogger(__name__)
 
 
-class openIMISGraphQLTestCase(GraphQLTestCase):
-    GRAPHQL_URL = f"/{settings.SITE_ROOT()}graphql"
-    GRAPHQL_SCHEMA = True
-
-    class BaseTestContext:
+class BaseTestContext:
         def __init__(self, user=None, method="GET", path="/", data=None, headers=None):
             """
             Initialize a test context with realistic request attributes.
@@ -30,52 +27,41 @@ class openIMISGraphQLTestCase(GraphQLTestCase):
                 data: Request payload (dict for POST/PUT, None for GET).
                 headers: Custom HTTP headers (dict).
             """
-            # Default to AnonymousUser if no user provided
             self.user = user if user is not None else AnonymousUser()
-            
-            # Initialize request factory
             self.factory = RequestFactory()
-            
-            # Set HTTP method (uppercase for consistency)
             self.method = method.upper()
-            
-            # Create a base request object
             self.request = self.factory.generic(
                 method=self.method,
                 path=path,
                 data=data or {},
                 content_type="application/json"
             )
-            
-            # Set user on the request
             self.request.user = self.user
-            
-            # META dictionary for headers and server info
             self.META = self.request.META
             self.META["REQUEST_METHOD"] = self.method
             self.META["PATH_INFO"] = path
-            self.META["SERVER_NAME"] = "testserver"  # Required for URL resolution
+            self.META["SERVER_NAME"] = "testserver"
             self.META["SERVER_PORT"] = "80"
-            
-            # Add CSRF token if needed (for POST/PUT with session auth)
+
+            # Add CSRF token if needed
             if self.method in ["POST", "PUT", "PATCH"]:
                 self.META["CSRF_COOKIE"] = get_token(self.request)
                 self.request.CSRF_TOKEN = self.META["CSRF_COOKIE"]
-            
-            # Add CORS-related headers (customize as per your CORS setup)
+
+            # Add CORS headers
             self.META["HTTP_ORIGIN"] = "http://testclient.com"
             self.META["HTTP_ACCESS_CONTROL_REQUEST_METHOD"] = self.method
-            
-            # Add custom headers if provided
+
+            # Add custom headers
             if headers:
                 for key, value in headers.items():
-                    # Convert to HTTP_* format for Django META
                     meta_key = f"HTTP_{key.upper().replace('-', '_')}"
                     self.META[meta_key] = value
-            
-            # Wrap request for Django REST Framework compatibility
-            if hasattr(self, "drf_request"):
-                self.drf_request = DRFRequest(self.request)
+            cookies = {'JWR':get_token_jwt(self.user, self)}
+            # Add cookies (e.g., JWT token)
+            if cookies:
+                cookie_string = "; ".join(f"{key}={value}" for key, value in cookies.items())
+                self.META["HTTP_COOKIE"] = cookie_string
 
         def update_meta(self, key, value):
             """Utility method to update META dictionary."""
@@ -85,6 +71,14 @@ class openIMISGraphQLTestCase(GraphQLTestCase):
         def get_request(self):
             """Return the constructed request object."""
             return self.request
+        
+        
+
+class openIMISGraphQLTestCase(GraphQLTestCase):
+    GRAPHQL_URL = f"/{settings.SITE_ROOT()}graphql"
+    GRAPHQL_SCHEMA = True
+
+    
     # client = None
     @classmethod
     def setUpClass(cls):
