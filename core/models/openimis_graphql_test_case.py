@@ -57,7 +57,9 @@ class BaseTestContext:
                 for key, value in headers.items():
                     meta_key = f"HTTP_{key.upper().replace('-', '_')}"
                     self.META[meta_key] = value
-            cookies = {'JWR':get_token_jwt(self.user, self)}
+                    
+            self.jwt =  get_token_jwt(self.user, self)
+            cookies = {'JWR':self.jwt}
             # Add cookies (e.g., JWT token)
             if cookies:
                 cookie_string = "; ".join(f"{key}={value}" for key, value in cookies.items())
@@ -71,6 +73,9 @@ class BaseTestContext:
         def get_request(self):
             """Return the constructed request object."""
             return self.request
+        def get_jwt(self):
+            """Return the constructed request object."""
+            return self.jwt
         
         
 
@@ -163,15 +168,16 @@ class openIMISGraphQLTestCase(GraphQLTestCase):
         if follow:
             mutation_type = list(content['data'].keys())[0]
             return self.get_mutation_result(
-                content['data'][mutation_type]['clientMutationId'],
-                token
+                content['data'][mutation_type]['internalId'],
+                token,
+                internal=True
             )
         else:
             return json.loads(response.content)
 
     def send_mutation(self, mutation_type, input_params, token, follow=True, raw=False):
         if "clientMutationId" not in input_params:
-            input_params["clientMutationId"] = uuid.uuid4()
+            input_params["clientMutationId"] = str(uuid.uuid4())
         response = self.query(
             f"""
         mutation 

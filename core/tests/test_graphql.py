@@ -1,6 +1,5 @@
-from core.models.openimis_graphql_test_case import openIMISGraphQLTestCase
+from core.models.openimis_graphql_test_case import openIMISGraphQLTestCase, BaseTestContext
 from core.test_helpers import create_test_interactive_user
-from graphql_jwt.shortcuts import get_token
 from core import filter_validity
 from location.models import Location
 import json
@@ -15,7 +14,7 @@ class gqlTest(openIMISGraphQLTestCase):
     def setUpClass(cls):
         super().setUpClass()
         cls.admin_user = create_test_interactive_user(username=cls.admin_username, password=cls.admin_password)
-        cls.admin_token = get_token(cls.admin_user, cls.BaseTestContext(user=cls.admin_user))
+        cls.admin_token = BaseTestContext(user=cls.admin_user).get_jwt()
         cls.disctict = Location.objects.filter(type='D', *filter_validity()).first()
     
     def test_login_successful(self):
@@ -94,34 +93,19 @@ class gqlTest(openIMISGraphQLTestCase):
             }
             }
         """
-        response = self.query(
-            query,
-            headers={"HTTP_AUTHORIZATION": f"Bearer {self.admin_token}"}
-        )
-        self.assertResponseNoErrors(response)
-        _ = json.loads(response.content)
+        response = self.send_mutation_raw(query, self.admin_token)
+
 
     def test_create_role(self):
-        query = """
-            mutation {
-                createRole(
-                    input: {
-                        name: "SP Enrollment Officer",
-                        isBlocked: false,
-                        isSystem: false,
-                        rightsId: [159001,159002,159003,159004,159005,180001,180002,180003,180004]
-                    }
-                ) {
-                    clientMutationId
-                }
-            }
-        """
-        response = self.query(
-            query,
-            headers={"HTTP_AUTHORIZATION": f"Bearer {self.admin_token}"}
-        )
-        self.assertResponseNoErrors(response)
+    
+        input_param =  {
+            "name": "SP Enrollment Officer",
+            "isBlocked": False,
+            "isSystem": False,
+            "rightsId": [159001,159002,159003,159004,159005,180001,180002,180003,180004]
+        }
 
+        response = self.send_mutation('createRole',input_param, self.admin_token)
     def test_create_user_with_null_uuid(self):
         query = """
             mutation (
