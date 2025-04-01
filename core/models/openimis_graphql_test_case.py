@@ -11,6 +11,7 @@ from django.test import RequestFactory
 from django.middleware.csrf import get_token
 from graphql_jwt.shortcuts import get_token as get_token_jwt
 from rest_framework.request import Request as DRFRequest
+from django.contrib.auth.models import AnonymousUser
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +28,15 @@ class BaseTestContext:
                 data: Request payload (dict for POST/PUT, None for GET).
                 headers: Custom HTTP headers (dict).
             """
-            self.user = user if user is not None else AnonymousUser()
+            cookies = {}
+            if user is not None:
+                self.user = user
+                self.jwt =  get_token_jwt(self.user, self)
+                cookies['JWR'] = self.jwt
+            else:
+                self.user = AnonymousUser()
+                
+            
             self.factory = RequestFactory()
             self.method = method.upper()
             self.request = self.factory.generic(
@@ -58,8 +67,7 @@ class BaseTestContext:
                     meta_key = f"HTTP_{key.upper().replace('-', '_')}"
                     self.META[meta_key] = value
                     
-            self.jwt =  get_token_jwt(self.user, self)
-            cookies = {'JWR':self.jwt}
+            
             # Add cookies (e.g., JWT token)
             if cookies:
                 cookie_string = "; ".join(f"{key}={value}" for key, value in cookies.items())
