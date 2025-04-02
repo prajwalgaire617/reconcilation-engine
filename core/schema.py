@@ -231,7 +231,6 @@ class OpenIMISMutation(graphene.relay.ClientIDMutation):
                                 coerced_list.append(inner_type.parse_value(item))
                             else:
                                 coerced_list.append(item)
-                            coerced_list.append(inner_type.parse_value(item))
                         elif inner_type.__class__ == graphene.utils.subclass_with_meta.SubclassWithMeta_Meta:
                             coerced_list.append(cls.coerce_mutation_data(item, input_class=inner_type))
                         else:
