@@ -98,7 +98,7 @@ class openIMISGraphQLTestCase(GraphQLTestCase):
         # cls.client=Client(cls.schema)
         super(openIMISGraphQLTestCase, cls).setUpClass()
 
-    def get_mutation_result(self, mutation_uuid, token, internal=False):
+    def get_mutation_result(self, mutation_uuid, token, internal=False, allow_exceptions=True):
         content = None
         while True:
             # wait for the mutation to be done
@@ -118,7 +118,7 @@ class openIMISGraphQLTestCase(GraphQLTestCase):
                 {{
                     node
                     {{
-                        id,status,error,clientMutationId,clientMutationLabel,clientMutationDetails,requestDateTime,jsonExt
+                        id,status,error,{'clientMutationId,' if not internal else ''}clientMutationLabel,clientMutationDetails,requestDateTime,jsonExt
                     }}
                 }}
                 }}
@@ -138,9 +138,17 @@ class openIMISGraphQLTestCase(GraphQLTestCase):
                                     self._assert_mutationEdge_no_error(e)
                                     return content
                 else:
-                    raise ValueError("mutation has no edge field")
+                    if allow_exceptions:
+                        raise ValueError("mutation has no edge field")
+                    else:
+                        logger.error("mutation has no edge field")
+                        return content
             else:
-                raise ValueError("mutation has no data field")
+                if allow_exceptions:
+                    raise ValueError("mutation has no data field")
+                else:
+                    logger.error("mutation has no data field")
+                    return content
             time.sleep(1)
         if self._assert_mutationEdge_no_error(content):
             return None
@@ -183,8 +191,10 @@ class openIMISGraphQLTestCase(GraphQLTestCase):
         else:
             return json.loads(response.content)
 
-    def send_mutation(self, mutation_type, input_params, token, follow=True, raw=False):
-        if "clientMutationId" not in input_params:
+    def send_mutation(self, mutation_type, input_params, token, follow=True, raw=False, add_client_mutation_id=False, allow_exceptions=True):
+        # copy to avoid adding clientMutationId to the calling param
+        input_params = dict(input_params)
+        if add_client_mutation_id and "clientMutationId" not in input_params:
             input_params["clientMutationId"] = str(uuid.uuid4())
         response = self.query(
             f"""
@@ -196,17 +206,18 @@ class openIMISGraphQLTestCase(GraphQLTestCase):
 
           {{
             internalId
-            clientMutationId
+            {'clientMutationId' if 'clientMutationId' in input_params else ''} 
           }}
         }}
         """,
             headers={"HTTP_AUTHORIZATION": f"Bearer {token}"},
         )
-        self.assertResponseNoErrors(response)
+        if allow_exceptions:
+            self.assertResponseNoErrors(response)
         content = json.loads(response.content)
         if follow:
             return self.get_mutation_result(
-                content["data"][mutation_type]["internalId"], token, internal=True
+                content["data"][mutation_type]["internalId"], token, internal=True, allow_exceptions=allow_exceptions
             )
         else:
             return content
@@ -217,7 +228,9 @@ class openIMISGraphQLTestCase(GraphQLTestCase):
             if isinstance(v, str):
                 return f'"{v}"'
             if isinstance(v, list):
-                return json.dumps(v)
+                return f"[{','.join([str(wrap_arg(vv)) for vv in v])}]"
+            if isinstance(v, dict):
+                return str(self.build_params(v))
             if isinstance(v, bool):
                 return str(v).lower()
             if isinstance(v, datetime.date):
