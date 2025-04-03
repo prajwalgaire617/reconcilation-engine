@@ -7,24 +7,98 @@ from graphene import Schema
 from graphene.test import Client
 import datetime
 import time
+from django.test import RequestFactory
+from django.middleware.csrf import get_token
+from graphql_jwt.shortcuts import get_token as get_token_jwt
+from rest_framework.request import Request as DRFRequest
+from django.contrib.auth.models import AnonymousUser
 
 logger = logging.getLogger(__name__)
 
+
+class BaseTestContext:
+        def __init__(self, user=None, method="GET", path="/", data=None, headers=None):
+            """
+            Initialize a test context with realistic request attributes.
+            
+            Args:
+                user: User instance (authenticated or None for anonymous).
+                method: HTTP method (e.g., "GET", "POST").
+                path: URL path (e.g., "/api/endpoint/").
+                data: Request payload (dict for POST/PUT, None for GET).
+                headers: Custom HTTP headers (dict).
+            """
+            cookies = {}
+            if user is not None:
+                self.user = user
+                self.jwt =  get_token_jwt(self.user, self)
+                cookies['JWR'] = self.jwt
+            else:
+                self.user = AnonymousUser()
+                
+            
+            self.factory = RequestFactory()
+            self.method = method.upper()
+            self.request = self.factory.generic(
+                method=self.method,
+                path=path,
+                data=data or {},
+                content_type="application/json"
+            )
+            self.request.user = self.user
+            self.META = self.request.META
+            self.META["REQUEST_METHOD"] = self.method
+            self.META["PATH_INFO"] = path
+            self.META["SERVER_NAME"] = "testserver"
+            self.META["SERVER_PORT"] = "80"
+
+            # Add CSRF token if needed
+            if self.method in ["POST", "PUT", "PATCH"]:
+                self.META["CSRF_COOKIE"] = get_token(self.request)
+                self.request.CSRF_TOKEN = self.META["CSRF_COOKIE"]
+
+            # Add CORS headers
+            self.META["HTTP_ORIGIN"] = "http://testclient.com"
+            self.META["HTTP_ACCESS_CONTROL_REQUEST_METHOD"] = self.method
+
+            # Add custom headers
+            if headers:
+                for key, value in headers.items():
+                    meta_key = f"HTTP_{key.upper().replace('-', '_')}"
+                    self.META[meta_key] = value
+                    
+            
+            # Add cookies (e.g., JWT token)
+            if cookies:
+                cookie_string = "; ".join(f"{key}={value}" for key, value in cookies.items())
+                self.META["HTTP_COOKIE"] = cookie_string
+
+        def update_meta(self, key, value):
+            """Utility method to update META dictionary."""
+            self.META[key] = value
+            self.request.META = self.META
+
+        def get_request(self):
+            """Return the constructed request object."""
+            return self.request
+        def get_jwt(self):
+            """Return the constructed request object."""
+            return self.jwt
+        
+        
 
 class openIMISGraphQLTestCase(GraphQLTestCase):
     GRAPHQL_URL = f"/{settings.SITE_ROOT()}graphql"
     GRAPHQL_SCHEMA = True
 
-    class BaseTestContext:
-        def __init__(self, user):
-            self.user = user
+    
     # client = None
     @classmethod
     def setUpClass(cls):
         # cls.client=Client(cls.schema)
         super(openIMISGraphQLTestCase, cls).setUpClass()
 
-    def get_mutation_result(self, mutation_uuid, token, internal=False):
+    def get_mutation_result(self, mutation_uuid, token, internal=False, allow_exceptions=True):
         content = None
         while True:
             # wait for the mutation to be done
@@ -44,7 +118,7 @@ class openIMISGraphQLTestCase(GraphQLTestCase):
                 {{
                     node
                     {{
-                        id,status,error,clientMutationId,clientMutationLabel,clientMutationDetails,requestDateTime,jsonExt
+                        id,status,error,{'clientMutationId,' if not internal else ''}clientMutationLabel,clientMutationDetails,requestDateTime,jsonExt
                     }}
                 }}
                 }}
@@ -64,9 +138,17 @@ class openIMISGraphQLTestCase(GraphQLTestCase):
                                     self._assert_mutationEdge_no_error(e)
                                     return content
                 else:
-                    raise ValueError("mutation has no edge field")
+                    if allow_exceptions:
+                        raise ValueError("mutation has no edge field")
+                    else:
+                        logger.error("mutation has no edge field")
+                        return content
             else:
-                raise ValueError("mutation has no data field")
+                if allow_exceptions:
+                    raise ValueError("mutation has no data field")
+                else:
+                    logger.error("mutation has no data field")
+                    return content
             time.sleep(1)
         if self._assert_mutationEdge_no_error(content):
             return None
@@ -102,15 +184,18 @@ class openIMISGraphQLTestCase(GraphQLTestCase):
         if follow:
             mutation_type = list(content['data'].keys())[0]
             return self.get_mutation_result(
-                content['data'][mutation_type]['clientMutationId'],
-                token
+                content['data'][mutation_type]['internalId'],
+                token,
+                internal=True
             )
         else:
             return json.loads(response.content)
 
-    def send_mutation(self, mutation_type, input_params, token, follow=True, raw=False):
-        if "clientMutationId" not in input_params:
-            input_params["clientMutationId"] = uuid.uuid4()
+    def send_mutation(self, mutation_type, input_params, token, follow=True, raw=False, add_client_mutation_id=False, allow_exceptions=True):
+        # copy to avoid adding clientMutationId to the calling param
+        input_params = dict(input_params)
+        if add_client_mutation_id and "clientMutationId" not in input_params:
+            input_params["clientMutationId"] = str(uuid.uuid4())
         response = self.query(
             f"""
         mutation 
@@ -121,17 +206,18 @@ class openIMISGraphQLTestCase(GraphQLTestCase):
 
           {{
             internalId
-            clientMutationId
+            {'clientMutationId' if 'clientMutationId' in input_params else ''} 
           }}
         }}
         """,
             headers={"HTTP_AUTHORIZATION": f"Bearer {token}"},
         )
-        self.assertResponseNoErrors(response)
+        if allow_exceptions:
+            self.assertResponseNoErrors(response)
         content = json.loads(response.content)
         if follow:
             return self.get_mutation_result(
-                content["data"][mutation_type]["internalId"], token, internal=True
+                content["data"][mutation_type]["internalId"], token, internal=True, allow_exceptions=allow_exceptions
             )
         else:
             return content
@@ -142,7 +228,9 @@ class openIMISGraphQLTestCase(GraphQLTestCase):
             if isinstance(v, str):
                 return f'"{v}"'
             if isinstance(v, list):
-                return json.dumps(v)
+                return f"[{','.join([str(wrap_arg(vv)) for vv in v])}]"
+            if isinstance(v, dict):
+                return str(self.build_params(v))
             if isinstance(v, bool):
                 return str(v).lower()
             if isinstance(v, datetime.date):

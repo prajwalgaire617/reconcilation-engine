@@ -159,7 +159,7 @@ class AbsStrategy(object, metaclass=abc.ABCMeta):
             this function will send a signal and the rules will
             reply if they have object matching the classname in their list of object
         """
-        list_class = cls.get_linked_class(sender=sender, class_name=instance.__class__.__name__)
+        list_class = cls.get_linked_class(sender, instance.__class__.__name__)
         # if the class have a calculation param, (like contribution or payment plan) add class name
         if hasattr(instance, 'calculation'):
             list_class.append(instance.__class__.__name__)

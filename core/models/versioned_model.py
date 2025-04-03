@@ -41,13 +41,13 @@ class CachedManager(models.Manager):
                         pass
                 if isinstance(value, uuid.UUID):
                     value = str(value)
-                cache_key = get_cache_key(self.__class__, value)
+                cache_key = get_cache_key(self.model, value)
         # use case for Family Request elements in args
         elif not kwargs and args and len(args) == 1 :
             if len(args[0].children) == 1:
                 field, value = args[0].children[0]
                 if field in unique_fields:
-                    cache_key = get_cache_key(self.__class__, value)
+                    cache_key = get_cache_key(self.model, value)
 
         # If we constructed a cache key, try to retrieve from the cache.
         if cache_key:
