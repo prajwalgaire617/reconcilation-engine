@@ -31,7 +31,7 @@ class UserServicesTest(TestCase):
         # This shouldn't be necessary but cleanup from date tests tend not to cleanup properly
         core.calendar = importlib.import_module(".calendars.ad_calendar", "core")
         core.datetime = importlib.import_module(".datetimes.ad_datetime", "core")
-        self.claim_admin_class = apps.get_model("claim", "ClaimAdmin")
+        self.claim_admin_class = apps.get_model("core", "ClaimAdmin")
         self.factory = RequestFactory()
 
     def test_iuser_min(self):
