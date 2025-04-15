@@ -511,6 +511,7 @@ This will make the data appear in the masked way again.
 * async_mutations: wherever mutations are (true=) processed via message
   queuing or (false=) in interactive server process (default: "False")
 * currency: Country currency (default: "$")
+* gql_query_claim_admins_perms: required rights to call claim_admins GraphQL Query (default: `[]`)
 * gql_query_roles_perms: required rights to call role, roleRight and modulesPermissions GraphQL Queries (default: ["152101"])
 * gql_mutation_create_roles_perms: required rights to call createRole GraphQL Mutation (default: ["122002"])
 * gql_mutation_update_roles_perms: required rights to call updateRole  GraphQL Mutation (default: ["122003"])

@@ -165,3 +165,41 @@ class gqlTest(openIMISGraphQLTestCase):
             headers={"HTTP_AUTHORIZATION": f"Bearer {self.admin_token}"}
         )
         self.assertResponseNoErrors(response)
+        
+        
+    def test_fetch_claimadmin(self):
+        query = """
+      query ClaimAdminPicker ($search: String, $hf: String, $region_uuid: String, $district_uuid: String) {
+          claimAdmins(search: $search, first: 20, healthFacility_Uuid: $hf, regionUuid: $region_uuid, districtUuid: $district_uuid) {
+              edges {
+                  node {
+                      id
+                      uuid
+                      code
+                      lastName
+                      otherNames
+                      healthFacility {
+                          id uuid code name level
+                          servicesPricelist{id, uuid}, itemsPricelist{id, uuid}
+                          location {
+                              id
+                              uuid
+                              code
+                              name
+                              parent {
+                                code name id uuid
+                              }
+                          }
+                      }
+                      
+                    }
+                }
+            }
+        }
+        """
+        response = self.query(
+            query,
+            headers={"HTTP_AUTHORIZATION": f"Bearer {self.admin_token}"}
+        )
+        self.assertResponseNoErrors(response)
+        

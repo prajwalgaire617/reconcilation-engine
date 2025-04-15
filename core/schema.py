@@ -759,25 +759,32 @@ class Query(graphene.ObjectType):
             search=None,
             **kwargs
     ):
+        user_health_facility = None
         if not info.context.user.has_perms(
-                ClaimConfig.gql_query_claim_admins_perms
+                CoreConfig.gql_query_claim_admins_perms
         ):
             raise PermissionDenied(_("unauthorized"))
 
         hf_filters = [*filter_validity(**kwargs)]
         district_uuid = kwargs.get('district_uuid', None)
         region_uuid = kwargs.get('region_uuid', None)
-        if district_uuid is not None:
-            hf_filters += [Q(location__uuid=district_uuid)]
-        elif region_uuid is not None:
-            hf_filters += [Q(location__parent__uuid=region_uuid)]
-        if settings.ROW_SECURITY:
-            q = LocationManager().build_user_location_filter_query( info.context.user._u, prefix='location', loc_types=['D'])
-            if q:
-                hf_filters += [q]
-
-        user_health_facility = HealthFacility.objects.filter(*hf_filters)
-
+        try:
+            apps.get_model('location', 'HealthFacility')
+            if district_uuid is not None:
+                hf_filters += [Q(location__uuid=district_uuid)]
+            elif region_uuid is not None:
+                hf_filters += [Q(location__parent__uuid=region_uuid)]
+            
+            if settings.ROW_SECURITY:
+                from locations.models import LocationManager
+                q = LocationManager().build_user_location_filter_query( info.context.user._u, prefix='location', loc_types=['D'])
+                if q:
+                    hf_filters += [q]
+                
+            user_health_facility = HealthFacility.objects.filter(*hf_filters)
+        except:
+            pass
+        
         filters = [*filter_validity(**kwargs)]
         if user_health_facility:
             filters += [Q(health_facility__in=user_health_facility)]
