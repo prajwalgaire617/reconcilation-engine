@@ -9,6 +9,10 @@ from django.core.exceptions import ValidationError
 from django.db import models
 from django.db.models import F
 from simple_history.models import HistoricalRecords
+from core.utils import (
+    CachedManager,
+    CachedModelMixin
+)
 #from core.datetimes.ad_datetime import datetime as py_datetime
 
 from ..fields import DateTimeField
@@ -18,7 +22,7 @@ logger = logging.getLogger(__name__)
 
 cache = caches["default"]
 
-class HistoryModelManager(models.Manager):
+class HistoryModelManager(CachedManager):
     """
         Custom manager that allows querying HistoryModel by uuid
         and includes caching logic for better performance.
@@ -27,47 +31,23 @@ class HistoryModelManager(models.Manager):
     def get_queryset(self):
         return super().get_queryset().annotate(uuid=F('id'))
     
+
+    def filter(self, *args, **kwargs):
+        # Check if 'uuid' is in kwargs, and if so, rename it to 'id'
+        if 'uuid' in kwargs:
+            kwargs['id'] = kwargs.pop('uuid')
+        # Call the parent class's filter method with the modified kwargs
+        return super().filter(*args, **kwargs)
+    
     def get(self, *args, **kwargs):
-        """
-        Override of the get() method to check Redis cache before
-        performing a database query.
-        """
-        unique_fields = ('pk', 'id', 'uuid')
-        cache_key = None
-
-        # Case 1: Simple query with kwargs 
-        if kwargs and len(kwargs) == 1:
-            key = list(kwargs.keys())[0]
-            if key in unique_fields:
-                value = kwargs[key]
-                if key in ('id', 'pk'):
-                    try:
-                        # Convert to int if possible
-                        value = int(value)
-                    except (ValueError, TypeError):
-                        pass
-                if isinstance(value, uuid.UUID):
-                    value = str(value)
-                cache_key = f"{self.model.__name__}:{value}"
-
-        # If a cache key is constructed, check the cache first
-        if cache_key:
-            cached_instance = cache.get(cache_key)
-            if cached_instance is not None:
-                logger.debug(f"Instance retrieved from cache for key BBB: {cache_key}")
-                return cached_instance
-
-            # If the instance is not in the cache, perform the database query
-            instance = super().get(*args, **kwargs)
-            cache.set(cache_key, instance, timeout=None)
-            logger.debug(f"Instance cached after database query for key: {cache_key}")
-            return instance
-
-        # If the search is not simple, use the default behavior
-        return super().get(*args, **kwargs)
-
-
-class HistoryModel(DirtyFieldsMixin, models.Model):
+        # Check if 'uuid' is in kwargs, and if so, rename it to 'id'
+        if 'uuid' in kwargs:
+            kwargs['id'] = kwargs.pop('uuid')
+        # Call the parent class's filter method with the modified kwargs
+        return super().get(*args, **kwargs) 
+    
+    
+class HistoryModel(DirtyFieldsMixin,CachedModelMixin, models.Model):
     id = models.UUIDField(primary_key=True, db_column="UUID", default=None, editable=False)
     objects = HistoryModelManager()
     is_deleted = models.BooleanField(db_column="isDeleted", default=False)
@@ -97,7 +77,20 @@ class HistoryModel(DirtyFieldsMixin, models.Model):
 
     def save_history(self):
         pass
-
+    
+    def update(self, *args, user=None, username=None, save=True, **kwargs):
+        """
+        Overrides the default update to update the cache after saving the instance.
+        """
+        obj_data = kwargs.pop('data', {})
+        if not obj_data:
+            obj_data = kwargs
+            kwargs = {}
+        [setattr(self, key, obj_data[key]) for key in obj_data]
+        if save:
+            self.save(*args, user=user, username=user, **kwargs)
+        return self
+        
     def save(self, *args, user=None, username=None, **kwargs):
         # get the user data so as to assign later his uuid id in fields user_updated etc
         if not user:
@@ -172,21 +165,9 @@ class HistoryModel(DirtyFieldsMixin, models.Model):
             raise ValidationError(
                 'Record has not be deactivating, the object is different and must be updated before deactivating')
         
-    def update_cache(self):
-        """
-        Updates the cache for this object after saving.
-        """
-        cache_key = f"{self.__class__.__name__}:{self.pk}"
-        cache.set(cache_key, self, timeout=None) 
-        logger.debug(f"Saved and cached instance: {cache_key}")
 
-    def delete_cache(self):
-        """
-        Deletes the cache entry for this object.
-        """
-        cache_key = f"{self.__class__.__name__}:{self.pk}"
-        cache.delete(cache_key)
-        logger.debug(f"Removed instance from cache: {cache_key}")
+
+
 
     @classmethod
     def filter_queryset(cls, queryset=None):
