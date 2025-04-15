@@ -181,7 +181,7 @@ def create_or_update_claim_admin(user_id, data, audit_user_id, connected):
     data_subset["has_login"] = connected
     # Since ClaimAdmin is not in the core module, we have to dynamically load it.
     # If the Claim module is not loaded and someone requests a ClaimAdmin, this will raise an Exception
-    claim_admin_class = apps.get_model("claim", "ClaimAdmin")
+    claim_admin_class = apps.get_model("core", "ClaimAdmin")
     if user_id:
         # TODO we might want to update a user that has been deleted. Use Legacy ID ?
         claim_admin = claim_admin_class.objects.filter(validity_to__isnull=True, user__id=user_id).first()

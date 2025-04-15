@@ -23,7 +23,7 @@ def _post_save_rolerights_receiver(sender, instance, **kwargs):
             cache.clear()
         
 if 'claim' in sys.modules:
-    ClaimAdmin = apps.get_model('claim', 'ClaimAdmin')
+    ClaimAdmin = apps.get_model('core', 'ClaimAdmin')
     @receiver([post_save, post_delete], sender=ClaimAdmin)
     def _post_save_ca_receiver(sender, instance, **kwargs):
         with suppress(AttributeError):

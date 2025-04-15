@@ -47,7 +47,7 @@ class BaseDeleteMutation(BaseMutation):
     def async_mutate(cls, user, **data):
         output = []
         if "uuids" in data:
-           for uuid in data["uuids"]:
+           for uuid in set(data["uuids"]):
                deletion_result = super(BaseDeleteMutation, cls)\
                    .async_mutate(user, uuid=uuid)
                deletion_result = [None] if deletion_result is None else ["error"]
