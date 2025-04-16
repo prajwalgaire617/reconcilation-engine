@@ -124,6 +124,29 @@ class HistoryModel(DirtyFieldsMixin, models.Model):
             raise ValidationError(
                 'Record has not be deactivating, the object is different and must be updated before deactivating')
 
+    def copy(self, exclude_fields=['id', 'uuid']):
+        """
+        Creates a copy of a Django model instance, excluding specified fields (default: 'id' and 'uuid').
+        Args:
+            exclude_fields: List of field names to exclude from copying (default: ['id', 'uuid'])
+        Returns:
+            A new unsaved instance with copied attributes
+        """
+        model_class = self.__class__
+        new_instance = model_class()
+        fields = self._meta.get_fields()
+        for field in fields:
+            if field.name not in exclude_fields and hasattr(self, field.name):
+                if field.is_relation:
+                    if field.many_to_one or field.one_to_one:
+                        setattr(new_instance, field.name, getattr(self, field.name))
+                    elif field.one_to_many or field.many_to_many:
+                        continue
+                else:
+                    setattr(new_instance, field.name, getattr(self, field.name))
+
+        return new_instance
+
     @classmethod
     def filter_queryset(cls, queryset=None):
         if queryset is None:
