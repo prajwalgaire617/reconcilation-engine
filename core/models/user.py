@@ -305,7 +305,7 @@ class InteractiveUser(VersionedModel):
             is_claim_admin = cache.get(cache_name)
             if is_claim_admin is None:
                 
-                from claim.models import ClaimAdmin
+                from core.models.user import ClaimAdmin
                 is_claim_admin = ClaimAdmin.objects.filter(
                     code=self.login_name,
                     has_login=True,
@@ -396,7 +396,7 @@ class User(UUIDModel, PermissionsMixin, UUIDVersionedModel):
     t_user = models.ForeignKey(TechnicalUser, on_delete=models.CASCADE, blank=True, null=True)
     i_user = models.ForeignKey(InteractiveUser, on_delete=models.CASCADE, blank=True, null=True)
     officer = models.ForeignKey("Officer", on_delete=models.CASCADE, blank=True, null=True)
-    claim_admin = models.ForeignKey("claim.ClaimAdmin", on_delete=models.CASCADE, blank=True, null=True)
+    claim_admin = models.ForeignKey("ClaimAdmin", on_delete=models.CASCADE, blank=True, null=True)
 
     USERNAME_FIELD = 'username'
     REQUIRED_FIELDS = []
@@ -691,4 +691,93 @@ def _get_default_expire_date():
 def _query_export_path(instance, filename):
     # file will be uploaded to MEDIA_ROOT/user_<id>/<filename>
     return F'query_exports/user_{instance.user.uuid}/{filename}'
+
+
+class ClaimAdmin(VersionedModel):
+    id = models.AutoField(db_column='ClaimAdminId', primary_key=True)
+    uuid = models.CharField(db_column='ClaimAdminUUID',
+                            max_length=36, default=uuid.uuid4, unique=True)
+
+    code = models.CharField(db_column='ClaimAdminCode', max_length=50,
+                            blank=True, null=True)
+    last_name = models.CharField(
+        db_column='LastName', max_length=100, blank=True, null=True)
+    other_names = models.CharField(
+        db_column='OtherNames', max_length=100, blank=True, null=True)
+    dob = models.DateField(db_column='DOB', blank=True, null=True)
+    email_id = models.CharField(
+        db_column='EmailId', max_length=200, blank=True, null=True)
+    phone = models.CharField(
+        db_column='Phone', max_length=50, blank=True, null=True)
+    health_facility = models.ForeignKey(
+        "location.HealthFacility", models.DO_NOTHING, db_column='HFId', blank=True, null=True)
+    has_login = models.BooleanField(
+        db_column='HasLogin', blank=True, null=True)
+
+    audit_user_id = models.IntegerField(
+        db_column='AuditUserId', blank=True, null=True)
+    # row_id = models.BinaryField(db_column='RowId', blank=True, null=True)
+
+    def __str__(self):
+        return self.code + " " + self.last_name + " " + self.other_names
+
+    @classmethod
+    def get_queryset(cls, queryset, user):
+        queryset = cls.filter_queryset(queryset)
+        # GraphQL calls with an info object while Rest calls with the user itself
+        if isinstance(user, ResolveInfo):
+            user = user.context.user
+        if settings.ROW_SECURITY and user.is_anonymous:
+            return queryset.filter(id=-1)
+        if settings.ROW_SECURITY:
+            from location.schema import LocationManager
+            queryset = LocationManager().build_user_location_filter_query(
+                user._u, prefix='health_facility__location', queryset=queryset, loc_types=['D'])
+        return queryset
+
+    @property
+    def id_for_audit(self):
+        return self.audit_user_id
+
+    @property
+    def username(self):
+        return self.code
+
+    def get_username(self):
+        return self.code
+
+    @property
+    def is_staff(self):
+        return False
+
+    @property
+    def is_superuser(self):
+        return False
+
+    def set_password(self, raw_password):
+        raise NotImplementedError("Shouldn't set a password on an Officer")
+
+    def check_password(self, raw_password):
+        return False
+
+    @property
+    def officer_allowed_locations(self):
+        """
+        Returns uuid of all locations allowed for given officerLocationManager
+        """
+        district = self.health_facility.location
+        all_allowed_uuids = [district.parent.uuid, district.uuid]
+        child_locations = location_models.Location.objects.filter(
+            parent=district).values_list('uuid', flat=True)
+        while child_locations:
+            all_allowed_uuids.extend(child_locations)
+            child_locations = location_models.Location.objects\
+                .filter(parent__uuid__in=child_locations)\
+                .values_list('uuid', flat=True)
+
+        return location_models.Location.objects.filter(uuid__in=all_allowed_uuids)
+
+    class Meta:
+        managed = True
+        db_table = 'tblClaimAdmin'
 

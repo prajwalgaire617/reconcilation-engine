@@ -26,6 +26,7 @@ DEFAULT_CFG = {
     "async_mutations": "True" if os.environ.get("ASYNC", os.environ.get("MODE", "PROD")) == "PROD" else "False",
     "password_reset_template": "password_reset.txt",
     "currency": "$",
+    "gql_query_claim_admins_perms" : [],
     "gql_query_users_perms": ["121701"],
     "gql_mutation_create_users_perms": ["121702"],
     "gql_mutation_update_users_perms": ["121703"],
@@ -64,6 +65,8 @@ class CoreConfig(AppConfig):
     username_changeable = True
     age_of_majority = 18
     password_reset_template = "password_reset.txt"
+    
+    gql_query_claim_admins_perms = []
     gql_query_roles_perms = []
     gql_mutation_create_roles_perms = []
     gql_mutation_update_roles_perms = []
@@ -157,6 +160,7 @@ class CoreConfig(AppConfig):
         this.async_mutations = True if cfg["async_mutations"] is None else cfg["async_mutations"].lower() == "true"
 
     def _configure_permissions(self, cfg):
+        CoreConfig.gql_query_claim_admins_perms = cfg["gql_query_claim_admins_perms"]
         CoreConfig.gql_query_roles_perms = cfg["gql_query_roles_perms"]
         CoreConfig.gql_mutation_create_roles_perms = cfg["gql_mutation_create_roles_perms"]
         CoreConfig.gql_mutation_update_roles_perms = cfg["gql_mutation_update_roles_perms"]

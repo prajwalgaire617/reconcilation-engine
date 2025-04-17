@@ -41,7 +41,7 @@ class BaseService(ABC):
                 obj_data = self._adjust_update_payload(obj_data)
                 self.validation_class.validate_update(self.user, **obj_data)
                 obj_ = self.OBJECT_TYPE.objects.filter(id=obj_data['id']).first()
-                [setattr(obj_, key, obj_data[key]) for key in obj_data]
+                obj_.update(data=obj_data, user=self.user, save=False)
                 return self.save_instance(obj_)
         except Exception as exc:
             return output_exception(model_name=self.OBJECT_TYPE.__name__, method="update", exception=exc)

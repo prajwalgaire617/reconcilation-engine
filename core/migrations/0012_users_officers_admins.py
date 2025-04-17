@@ -10,15 +10,23 @@ import uuid
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('claim', '0012_item_service_jsonExtField'),
         ('core', '0011_auto_20210324_1528'),
     ]
-
+    from django.apps import apps
+    try:
+        ClaimAdmin = apps.get_model('claim', 'ClaimAdmin')
+    except:
+        ClaimAdmin = None
+        
+    if ClaimAdmin:
+        dependencies.append(('claim', '0012_item_service_jsonExtField'))
+        
     operations = [
         migrations.AddField(
             model_name='user',
             name='claim_admin',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.CASCADE, to='claim.ClaimAdmin'),
+            #TOREVERT
+            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.CASCADE, to='claim.ClaimAdmin' if ClaimAdmin else 'core.ClaimAdmin'),
         ),
         migrations.AddField(
             model_name='user',

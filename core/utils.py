@@ -8,6 +8,7 @@ from typing import Any, Dict, Type
 import core
 import graphene
 import jsonschema
+from django.db import models
 from django.apps import AppConfig
 from django.conf import settings
 from django.core.cache import cache
@@ -20,7 +21,13 @@ from graphql import GraphQLError
 from password_validator import PasswordValidator
 from zxcvbn import zxcvbn
 import datetime
+from django.core.cache import caches
+
 logger = logging.getLogger(__file__)
+
+UNIQUE_FIELDS = ('pk', 'id', 'uuid')
+CACHE_TIMEOUT = 3600 * 24
+cache = caches["default"]
 
 __all__ = [
     "TimeUtils",
@@ -207,6 +214,89 @@ def patient_category_mask(insuree, target_date):
         mask = mask | PATIENT_CATEGORY_MASK_MINOR
     return mask
 
+
+class CachedManager(models.Manager):
+    
+    def get(self, *args, **kwargs):
+        """
+        Overrides the get() method to check Redis cache before
+        performing a DB lookup for simple unique lookups.
+        """
+        
+        cache_key = None
+        value = None
+        value_key = None
+        # Case 1: Simple kwargs lookup.
+        if kwargs and len(kwargs) == 1:
+            key = list(kwargs.keys())[0]
+            if key in UNIQUE_FIELDS:
+                value = kwargs[key]
+                value_key = key
+        # use case for Family Request elements in args
+        elif not kwargs and args and len(args) == 1 :
+            if len(args[0].children) == 1:
+                field, arg_value = args[0].children[0]
+                if field in UNIQUE_FIELDS:
+                    value = arg_value
+                    value_key = 'pk'
+        # checking if the key is the PK
+
+        if value_key == 'pk':
+            cache_key = get_cache_key(self.model, value)
+        elif value:
+            field = self.model._meta.get_field(value_key) 
+            if not field.primary_key:
+                # we get the unique fields / pk conversion if exist
+                value = get_cache_key(self.model, kwargs[key])
+        # Convert UUID objects to string for the cache key.
+            if isinstance(value, uuid.UUID):
+                value = str(value)
+            else:
+                try:
+                    # Convert to int if possible.
+                    value = int(value)
+                except (ValueError, TypeError):
+                    pass
+            cache_key = get_cache_key(self.model, value)
+        # If we constructed a cache key, try to retrieve from the cache.
+        if cache_key:
+            cached_instance = cache.get(cache_key)
+            if cached_instance is not None:
+                if not isinstance(cached_instance, self.model):
+                    logger.error("wrong model for cached instance for key: %s", cache_key)
+                logger.debug("Returning cached instance for key: %s", cache_key)
+                return cached_instance
+
+            # Not in cache; perform DB lookup.
+        instance = super().get(*args, **kwargs)
+        cache.set(cache_key, instance, timeout=None)
+        logger.debug("Cached instance %s after DB lookup", cache_key)
+        return instance
+
+
+
+
+class CachedModelMixin():
+    def update_cache(self):
+        """
+        Updates the cache for this object after saving.
+        """
+        cache.set(get_cache_key(self.__class__, self.pk), self,  timeout=CACHE_TIMEOUT)
+        for f in UNIQUE_FIELDS:
+
+            # get_field raised an error on property raise 
+            if self.pk != getattr(self,f, self.pk):
+                cache.set(get_cache_key(self.__class__, getattr(self,f)), self.pk,  timeout=CACHE_TIMEOUT)
+
+        logger.debug("Saved and cached instance: %s", self)
+        
+    def delete_cache(self):
+        """
+        Deletes the cache entry for this object.
+        """
+        cache_key = f"{self.__class__.__name__}:{self.pk}"
+        cache.delete(cache_key)
+        logger.debug(f"Removed instance from cache: {cache_key}")
 
 class ExtendedConnection(graphene.Connection):
     """
@@ -489,7 +579,7 @@ class ConfigUtilMixin:
 
 
 def clear_cache(instance):
-    cache.delete(get_cache_key(instance.__class__, instance.id))
+    cache.delete(get_cache_key(instance.__class__, instance.pk))
 
 
 def get_cache_key(model, id):

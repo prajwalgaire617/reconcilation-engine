@@ -19,6 +19,7 @@ UUIDVersionedModel = versioned_model.UUIDVersionedModel
 InteractiveUser = user.InteractiveUser
 TechnicalUser = user.TechnicalUser
 Officer = user.Officer
+ClaimAdmin = user.ClaimAdmin
 Group = user.Group
 RoleRight = user.RoleRight
 Role = user.Role

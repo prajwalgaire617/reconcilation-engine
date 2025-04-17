@@ -11,6 +11,7 @@ class Migration(migrations.Migration):
     initial = True
 
     dependencies = [
+        ("location", "0003_userdistrict"),
         ('auth', '0009_alter_user_last_name_max_length'),
     ]
 
@@ -100,5 +101,65 @@ class Migration(migrations.Migration):
             model_name='user',
             name='user_permissions',
             field=models.ManyToManyField(blank=True, help_text='Specific permissions for this user.', related_name='user_set', related_query_name='user', to='auth.Permission', verbose_name='user permissions'),
+        ),
+    ]
+    from django.apps import apps
+    try:
+        ClaimAdmin = apps.get_model('claim', 'ClaimAdmin')
+    except:
+        ClaimAdmin = None
+    if not ClaimAdmin:
+        import datetime
+
+        operations += [
+    
+        migrations.CreateModel(
+            name='ClaimAdmin',
+            fields=[
+                ('id', models.AutoField(db_column='ClaimAdminId', primary_key=True, serialize=False)),
+                ('legacy_id', models.IntegerField(blank=True, db_column='LegacyID', null=True)),
+                ('code', models.CharField(blank=True, db_column='ClaimAdminCode', max_length=50, null=True)),
+                ('last_name', models.CharField(blank=True, db_column='LastName', max_length=100, null=True)),
+                ('other_names', models.CharField(blank=True, db_column='OtherNames', max_length=100, null=True)),
+                ('dob', models.DateField(blank=True, db_column='DOB', null=True)),
+                ('email_id', models.CharField(blank=True, db_column='EmailId', max_length=200, null=True)),
+                ('phone', models.CharField(blank=True, db_column='Phone', max_length=50, null=True)),
+                ('validity_from', core.fields.DateTimeField(db_column='ValidityFrom', default=datetime.datetime.now)),
+                ('validity_to', core.fields.DateTimeField(blank=True, db_column='ValidityTo', null=True)),
+                ('audit_user_id', models.IntegerField(blank=True, db_column='AuditUserId', null=True)),
+            ],
+            options={
+                'db_table': 'tblClaimAdmin',
+                'managed': False,
+            },
+        ),        
+        migrations.AddField(
+            model_name='claimadmin',
+            name='has_login',
+            field=models.BooleanField(blank=True, db_column='HasLogin', null=True),
+        ),
+        migrations.AddField(
+            model_name='claimadmin',
+            name='health_facility',
+            field=models.ForeignKey(blank=True, db_column='HFId', null=True, on_delete=django.db.models.deletion.DO_NOTHING, to='location.healthfacility'),
+        ),
+        migrations.AddField(
+            model_name='claimadmin',
+            name='uuid',
+            field=models.CharField(db_column='ClaimAdminUUID', default=uuid.uuid4, max_length=36, unique=True),
+        ),
+        migrations.AlterField(
+            model_name='claimadmin',
+            name='code',
+            field=models.CharField(blank=True, db_column='ClaimAdminCode', max_length=50, null=True),
+        ),
+        migrations.AlterField(
+            model_name='claimadmin',
+            name='legacy_id',
+            field=models.IntegerField(blank=True, db_column='LegacyID', null=True),
+        ),
+        migrations.AlterModelOptions(
+            name='claimadmin',
+            options={'managed': True},
         ),
     ]
