@@ -32,6 +32,7 @@ setup(
         'password-validator',
         'zxcvbn',
         'django-ratelimit',
+        'pandas'
     ],
     classifiers=[
         'Environment :: Web Environment',
