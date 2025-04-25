@@ -64,7 +64,7 @@ from core.custom_filters import CustomFilterWizardStorage
 from core.gql_queries import RoleGQLType, RoleRightGQLType, UserGQLType, InteractiveUserGQLType, LanguageGQLType, \
     CustomFilterGQLType, ModulePermissionsListGQLType, OfficerGQLType, PermissionOpenImisGQLType, \
     ModulePermissionGQLType, CustomFilterOptionGQLType
-from core.utils import flatten_dict, ExtendedConnection, get_active_superuser_sessions
+from core.utils import flatten_dict, ExtendedConnection, is_this_session_superuser
 from core.models import ModuleConfiguration, FieldControl, MutationLog, Language, RoleMutation, UserMutation, User, \
     InteractiveUser, Role, RoleRight, ClaimAdmin
 from core.services.roleServices import check_role_unique_name
@@ -279,8 +279,8 @@ class OpenIMISMutation(graphene.relay.ClientIDMutation):
         request = getattr(info, "context", None)
 
         user_agent = request.headers.get("User-Agent", "")
-        superuser_sessions = get_active_superuser_sessions()
-        if len(superuser_sessions) == 0:
+        current_session_key = request.session.session_key
+        if not is_this_session_superuser(current_session_key):
             if not any(bypass in user_agent for bypass in getattr(settings, "USER_AGENT_CSRF_BYPASS", [])):
                 csrf_middleware = CsrfViewMiddleware(lambda req: None)
                 reason = csrf_middleware.process_view(request, None, (), {})
@@ -529,8 +529,8 @@ class OrderedDjangoFilterConnectionField(DjangoFilterConnectionField):
             raise PermissionDenied(_("unauthorized"))
 
         user_agent = request.headers.get("User-Agent", "")
-        superuser_sessions = get_active_superuser_sessions()
-        if len(superuser_sessions) == 0:
+        current_session_key = request.session.session_key
+        if not is_this_session_superuser(current_session_key):
             if not any(bypass in user_agent for bypass in getattr(settings, "USER_AGENT_CSRF_BYPASS", [])):
                 csrf_middleware = CsrfViewMiddleware(lambda req: None)
                 reason = csrf_middleware.process_view(request, None, (), {})

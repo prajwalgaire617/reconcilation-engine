@@ -586,23 +586,22 @@ def get_cache_key(model, id):
     return f"cs_{model.__name__}_{id}"
 
 
-def get_active_superuser_sessions():
-    active_superusers = []
-
+def is_this_session_superuser(session_key):
     from django.contrib.sessions.models import Session
     from django.utils.timezone import now
-    sessions = Session.objects.filter(expire_date__gte=now())
+    from core.models import User
 
-    for session in sessions:
-        try:
-            data = session.get_decoded()
-            user_id = data.get('_auth_user_id')
-            if user_id:
-                from core.models import User
-                user = User.objects.get(id=user_id)
-                if user.is_superuser:
-                    active_superusers.append(user)
-        except Exception as e:
-            pass
+    try:
+        session = Session.objects.get(session_key=session_key, expire_date__gte=now())
+        data = session.get_decoded()
+        user_id = data.get('_auth_user_id')
+        if user_id:
+            user = User.objects.get(id=user_id)
+            if user.is_superuser:
+                return True
+    except Session.DoesNotExist:
+        pass
+    except Exception as e:
+        pass
 
-    return active_superusers
+    return False
