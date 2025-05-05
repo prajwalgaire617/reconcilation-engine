@@ -12,78 +12,90 @@ from django.middleware.csrf import get_token
 from graphql_jwt.shortcuts import get_token as get_token_jwt
 from rest_framework.request import Request as DRFRequest
 from django.contrib.auth.models import AnonymousUser
+from django.contrib.sessions.backends.db import SessionStore
 
 logger = logging.getLogger(__name__)
 
-
 class BaseTestContext:
-        def __init__(self, user=None, method="GET", path="/", data=None, headers=None):
-            """
-            Initialize a test context with realistic request attributes.
-            
-            Args:
-                user: User instance (authenticated or None for anonymous).
-                method: HTTP method (e.g., "GET", "POST").
-                path: URL path (e.g., "/api/endpoint/").
-                data: Request payload (dict for POST/PUT, None for GET).
-                headers: Custom HTTP headers (dict).
-            """
-            cookies = {}
-            if user is not None:
-                self.user = user
-                self.jwt =  get_token_jwt(self.user, self)
-                cookies['JWR'] = self.jwt
-            else:
-                self.user = AnonymousUser()
-                
-            
-            self.factory = RequestFactory()
-            self.method = method.upper()
-            self.request = self.factory.generic(
-                method=self.method,
-                path=path,
-                data=data or {},
-                content_type="application/json"
-            )
-            self.request.user = self.user
-            self.META = self.request.META
-            self.META["REQUEST_METHOD"] = self.method
-            self.META["PATH_INFO"] = path
-            self.META["SERVER_NAME"] = "testserver"
-            self.META["SERVER_PORT"] = "80"
+    def __init__(self, user=None, method="GET", path="/", data=None, headers=None):
+        """
+        Initialize a test context with realistic request attributes.
+        
+        Args:
+            user: User instance (authenticated or None for anonymous).
+            method: HTTP method (e.g., "GET", "POST").
+            path: URL path (e.g., "/api/endpoint/").
+            data: Request payload (dict for POST/PUT, None for GET).
+            headers: Custom HTTP headers (dict).
+        """
+        cookies = {}
+        self.factory = RequestFactory()
+        
+        # Initialize session
+        self.session = SessionStore()
+        if user is not None:
+            self.user = user
+            self.session.create()  # Create a new session
+            self.session['user_id'] = str(user.id)  # Store user ID or other relevant data
+            self.session.save()  # Save session to generate session_key
+            self.jwt = get_token_jwt(self.user, self)
+            cookies['JWT'] = self.jwt 
+        else:
+            self.user = AnonymousUser()
 
-            # Add CSRF token if needed
-            if self.method in ["POST", "PUT", "PATCH"]:
-                self.META["CSRF_COOKIE"] = get_token(self.request)
-                self.request.CSRF_TOKEN = self.META["CSRF_COOKIE"]
+        # Create request
+        self.method = method.upper()
+        self.request = self.factory.generic(
+            method=self.method,
+            path=path,
+            data=json.dumps(data) if data else {},  # Ensure JSON data is serialized
+            content_type="application/json"
+        )
+        
+        # Attach session and user to request
+        self.request.session = self.session
+        self.request.user = self.user
+        
+        # Set up META dictionary
+        self.META = self.request.META
+        self.META["REQUEST_METHOD"] = self.method
+        self.META["PATH_INFO"] = path
+        self.META["SERVER_NAME"] = "testserver"
+        self.META["SERVER_PORT"] = "80"
 
-            # Add CORS headers
-            self.META["HTTP_ORIGIN"] = "http://testclient.com"
-            self.META["HTTP_ACCESS_CONTROL_REQUEST_METHOD"] = self.method
+        # Add CSRF token if needed
+        if self.method in ["POST", "PUT", "PATCH"]:
+            self.META["CSRF_COOKIE"] = get_token(self.request)
+            self.request.CSRF_TOKEN = self.META["CSRF_COOKIE"]
 
-            # Add custom headers
-            if headers:
-                for key, value in headers.items():
-                    meta_key = f"HTTP_{key.upper().replace('-', '_')}"
-                    self.META[meta_key] = value
-                    
-            
-            # Add cookies (e.g., JWT token)
-            if cookies:
-                cookie_string = "; ".join(f"{key}={value}" for key, value in cookies.items())
-                self.META["HTTP_COOKIE"] = cookie_string
+        # Add CORS headers
+        self.META["HTTP_ORIGIN"] = "http://testclient.com"
+        self.META["HTTP_ACCESS_CONTROL_REQUEST_METHOD"] = self.method
 
-        def update_meta(self, key, value):
-            """Utility method to update META dictionary."""
-            self.META[key] = value
-            self.request.META = self.META
+        # Add custom headers
+        if headers:
+            for key, value in headers.items():
+                meta_key = f"HTTP_{key.upper().replace('-', '_')}"
+                self.META[meta_key] = value
 
-        def get_request(self):
-            """Return the constructed request object."""
-            return self.request
-        def get_jwt(self):
-            """Return the constructed request object."""
-            return self.jwt
+        # Add cookies (e.g., session ID and JWT token)
+        cookies['sessionid'] = self.session.session_key
+        if cookies:
+            cookie_string = "; ".join(f"{key}={value}" for key, value in cookies.items())
+            self.META["HTTP_COOKIE"] = cookie_string
+
+    def update_meta(self, key, value):
+        """Utility method to update META dictionary."""
+        self.META[key] = value
+        self.request.META = self.META
+
+    def get_request(self):
+        """Return the constructed request object."""
+        return self.request
+
+    def get_jwt(self):
+        """Return the JWT token."""
+        return getattr(self, 'jwt', None)
         
         
 
