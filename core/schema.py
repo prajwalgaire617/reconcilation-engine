@@ -72,6 +72,7 @@ from core.services.userServices import check_user_unique_email
 from core.validation.obligatoryFieldValidation import validate_payload_for_obligatory_fields
 from core.serializers import InteractiveUserSerializer
 from location.gql_queries import HealthFacilityGQLType
+from location.models import HealthFacility
 MAX_SMALLINT = 32767
 MIN_SMALLINT = -32768
 WEBAPP_EXPECTED_REQUESTED_WITH = 'webapp'
@@ -1671,8 +1672,23 @@ def update_or_create_user(data, user):
 
 
     if UT_INTERACTIVE in data["user_types"]:
+        health_facility_id = data.get('health_facility_id', None)
+        location_id = data.get('location_id', None)
+        data_copied = data
+        if not location_id:
+            if health_facility_id:
+                hf = HealthFacility.objects.filter(id=health_facility_id).first()
+                if hf:
+                    officer_location_id = hf.location
+                    if hf.location.parent:
+                        officer_location_id = hf.location.parent
+                        if hf.location.parent.parent:
+                            officer_location_id = hf.location.parent.parent
+                            if hf.location.parent.parent.parent:
+                                officer_location_id = hf.location.parent.parent.parent
+                    data_copied["location_id"] = officer_location_id.id
         i_user, i_user_created = create_or_update_interactive_user(
-            user_uuid, data, user.id_for_audit, len(data["user_types"]) > 1)
+            user_uuid, data_copied, user.id_for_audit, len(data["user_types"]) > 1)
     else:
         i_user, i_user_created = None, False
     if UT_OFFICER in data["user_types"]:
