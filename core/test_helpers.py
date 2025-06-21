@@ -1,5 +1,6 @@
 from core.models import Officer, InteractiveUser, User, TechnicalUser, filter_validity
 from core.models.openimis_graphql_test_case import openIMISGraphQLTestCase
+from core.models.user import ClaimAdmin
 from core.services.userServices import create_or_update_officer_villages, create_or_update_interactive_user, \
     create_or_update_core_user
 from core.services import create_or_update_user_roles
@@ -107,6 +108,45 @@ def create_test_technical_user(
         **(custom_core_user_props)
     )
     return core_user
+
+
+def create_test_claim_admin(custom_props=None):
+    if custom_props is None:
+        custom_props = {}
+    from core import datetime
+    custom_props = {k: v for k, v in custom_props.items() if hasattr(ClaimAdmin, k)}
+    if "health_facility" not in custom_props and "health_facility_id" not in custom_props:
+        custom_props['health_facility'] = create_test_health_facility(code=None, location_id=None)
+
+    code = custom_props.pop('code', 'TST-CA')
+    uuid = custom_props.pop('uuid', uuid4())
+    ca = None
+    qs_ca = ClaimAdmin.objects
+    data = {
+        "code": code,
+        "uuid": uuid,
+        "last_name": "LastAdmin",
+        "other_names": "JoeAdmin",
+        "email_id": "joeadmin@lastadmin.com",
+        "phone": "+12027621401",
+        "has_login": False,
+        "audit_user_id": 1,
+        "validity_from": datetime.datetime(2019, 6, 1),
+        **custom_props
+    }
+    if code:
+        qs_ca = qs_ca.filter(code=code)
+    if uuid:
+        qs_ca = qs_ca.filter(uuid=uuid)
+
+    if code or uuid:
+        ca = qs_ca.first()
+    if ca:
+        data['uuid'] = ca.uuid
+        ca.objects.update(**data)
+        return ca
+    else:
+        return ClaimAdmin.objects.create(**data)
 
 
 def compare_dicts(dict1, dict2):
