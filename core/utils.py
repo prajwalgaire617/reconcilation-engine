@@ -323,7 +323,7 @@ class CachedManager(models.Manager):
         if uncached_values:
             db_filter = {f"{field}__in": uncached_values} if kwargs else 
             if kwargs:
-                db_qs = super().filter(**{f"{field}__in": uncached_values}))
+                db_qs = super().filter(**{f"{field}__in": uncached_values})
             else:
                 db_qs = super().filter(Q(**{f"{field}__in": uncached_values}))
             for instance in db_qs:
