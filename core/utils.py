@@ -234,7 +234,7 @@ class CachedManager(models.Manager):
             lookup = key.split('__')[-1] if '__' in key else 'exact'
             return field in UNIQUE_FIELDS and lookup in {'exact', 'in'}, key, kwargs.get(key), field, lookup
         elif args and len(args) == 1 and isinstance(args[0], Q):
-            if len(args[0].children) == 1:
+            if len(args[0].children) == 1 and isinstance(args[0].children[0], tuple):
                 field, value = args[0].children[0]
                 lookup = field.split('__')[-1] if '__' in field else 'exact'
                 field = field.split('__')[0]
