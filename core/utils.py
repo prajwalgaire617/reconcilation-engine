@@ -247,7 +247,6 @@ class CachedManager(models.Manager):
             return self.get_queryset().none()
         qs = self.get_queryset().filter(pk__in=[instance.pk for instance in instances])
         qs._result_cache = list(instances)
-        qs._iterable_class = QuerySet._iterable_class
         return qs
 
     def _handle_cache_lookup(self, field, value, lookup):
@@ -367,8 +366,6 @@ class CachedManager(models.Manager):
         return cached_qs
 
 
-
-
 class CachedModelMixin():
     def update_cache(self):
         """
@@ -376,11 +373,9 @@ class CachedModelMixin():
         """
         cache.set(get_cache_key(self.__class__, self.pk), self,  timeout=CACHE_TIMEOUT)
         for f in UNIQUE_FIELDS:
-
             # get_field raised an error on property raise 
             if self.pk != getattr(self,f, self.pk):
                 cache.set(get_cache_key(self.__class__, getattr(self,f)), self.pk,  timeout=CACHE_TIMEOUT)
-
         logger.debug("Saved and cached instance: %s", self)
         
     def delete_cache(self):
@@ -476,7 +471,6 @@ def insert_role_right_for_system(system_role, right_id, apps):
             system_role,
         )
     else:
-
         for existing_role in existing_roles:
             role_rights = RoleRight.objects.filter(
                 role=existing_role, right_id=right_id
@@ -487,7 +481,6 @@ def insert_role_right_for_system(system_role, right_id, apps):
                     right_id=right_id,
                     validity_from=datetime.datetime.now()
                 )
-
 
 
 def remove_role_right_for_system(system_role, right_id, apps):
