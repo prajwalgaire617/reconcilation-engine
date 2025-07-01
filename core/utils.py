@@ -321,7 +321,7 @@ class CachedManager(models.Manager):
         # Handle in lookup
         cached_qs, uncached_values, field = cache_result
         if uncached_values:
-            db_filter = {f"{field}__in": uncached_values} if kwargs else 
+            db_filter = {f"{field}__in": uncached_values}
             if kwargs:
                 db_qs = super().filter(**{f"{field}__in": uncached_values})
             else:
