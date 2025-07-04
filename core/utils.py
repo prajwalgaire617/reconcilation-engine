@@ -217,6 +217,63 @@ def patient_category_mask(insuree, target_date):
 
 
 class CachedManager(models.Manager):
+    def get(self, *args, **kwargs):
+        """
+        Overrides the get() method to check Redis cache before
+        performing a DB lookup for simple unique lookups.
+        """
+        
+        cache_key = None
+        value = None
+        value_key = None
+        # Case 1: Simple kwargs lookup.
+        if kwargs and len(kwargs) == 1:
+            key = list(kwargs.keys())[0]
+            if key in UNIQUE_FIELDS:
+                value = kwargs[key]
+                value_key = key
+        # use case for Family Request elements in args
+        elif not kwargs and args and len(args) == 1 :
+            if len(args[0].children) == 1:
+                field, arg_value = args[0].children[0]
+                if field in UNIQUE_FIELDS:
+                    value = arg_value
+                    value_key = 'pk'
+        # checking if the key is the PK
+
+        if value_key == 'pk':
+            cache_key = get_cache_key(self.model, value)
+        elif value:
+            field = self.model._meta.get_field(value_key) 
+            if not field.primary_key:
+                # we get the unique fields / pk conversion if exist
+                value = get_cache_key(self.model, kwargs[key])
+        # Convert UUID objects to string for the cache key.
+            if isinstance(value, uuid.UUID):
+                value = str(value)
+            else:
+                try:
+                    # Convert to int if possible.
+                    value = int(value)
+                except (ValueError, TypeError):
+                    pass
+            cache_key = get_cache_key(self.model, value)
+        # If we constructed a cache key, try to retrieve from the cache.
+        if cache_key:
+            cached_instance = cache.get(cache_key)
+            if cached_instance is not None:
+                if not isinstance(cached_instance, self.model):
+                    logger.error("wrong model for cached instance for key: %s", cache_key)
+                logger.debug("Returning cached instance for key: %s", cache_key)
+                return cached_instance
+
+            # Not in cache; perform DB lookup.
+        instance = super().get(*args, **kwargs)
+        cache.set(cache_key, instance, timeout=None)
+        logger.debug("Cached instance %s after DB lookup", cache_key)
+        return instance
+
+    
     def _normalize_value(self, value):
         """Normalize value for cache key."""
         if isinstance(value, uuid.UUID):
