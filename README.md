@@ -71,6 +71,9 @@ openIMIS backend is configured for SSO, receiving the user (login) in the REMOTE
 The auto-provisioning assigns a default Group (name can be parameterized) from which django permissions are calculated (with UserRole - Role - RoleRight contributed from InteractiveUser).
 Note: if not existing, the default group is created at startup.
 
+### Language Support for Role Labels
+If the user has a language different from the system default and a translation is available in alt_language, the role name is returned in that language. Otherwise, it falls back to the default name. This ensures localized role labels are shown based on the user's language preferences.
+
 ### Mutations & Signals
 The OpenIMISMutation class of this module provides the template code for
 all openIMIS mutations. Based on "async_mutations" it detaches (or not)
