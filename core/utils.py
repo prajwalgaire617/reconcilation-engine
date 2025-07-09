@@ -216,64 +216,8 @@ def patient_category_mask(insuree, target_date):
     return mask
 
 
+
 class CachedManager(models.Manager):
-    def get(self, *args, **kwargs):
-        """
-        Overrides the get() method to check Redis cache before
-        performing a DB lookup for simple unique lookups.
-        """
-        
-        cache_key = None
-        value = None
-        value_key = None
-        # Case 1: Simple kwargs lookup.
-        if kwargs and len(kwargs) == 1:
-            key = list(kwargs.keys())[0]
-            if key in UNIQUE_FIELDS:
-                value = kwargs[key]
-                value_key = key
-        # use case for Family Request elements in args
-        elif not kwargs and args and len(args) == 1 :
-            if len(args[0].children) == 1:
-                field, arg_value = args[0].children[0]
-                if field in UNIQUE_FIELDS:
-                    value = arg_value
-                    value_key = 'pk'
-        # checking if the key is the PK
-
-        if value_key == 'pk':
-            cache_key = get_cache_key(self.model, value)
-        elif value:
-            field = self.model._meta.get_field(value_key) 
-            if not field.primary_key:
-                # we get the unique fields / pk conversion if exist
-                value = get_cache_key(self.model, kwargs[key])
-        # Convert UUID objects to string for the cache key.
-            if isinstance(value, uuid.UUID):
-                value = str(value)
-            else:
-                try:
-                    # Convert to int if possible.
-                    value = int(value)
-                except (ValueError, TypeError):
-                    pass
-            cache_key = get_cache_key(self.model, value)
-        # If we constructed a cache key, try to retrieve from the cache.
-        if cache_key:
-            cached_instance = cache.get(cache_key)
-            if cached_instance is not None:
-                if not isinstance(cached_instance, self.model):
-                    logger.error("wrong model for cached instance for key: %s", cache_key)
-                logger.debug("Returning cached instance for key: %s", cache_key)
-                return cached_instance
-
-            # Not in cache; perform DB lookup.
-        instance = super().get(*args, **kwargs)
-        cache.set(cache_key, instance, timeout=None)
-        logger.debug("Cached instance %s after DB lookup", cache_key)
-        return instance
-
-    
     def _normalize_value(self, value):
         """Normalize value for cache key."""
         if isinstance(value, uuid.UUID):
@@ -296,6 +240,8 @@ class CachedManager(models.Manager):
                 lookup = field.split('__')[-1] if '__' in field else 'exact'
                 field = field.split('__')[0]
                 return field in UNIQUE_FIELDS and lookup in {'exact', 'in'}, field, value, field, lookup
+            else:
+                logger.debug("Complex Q object detected: %s", args[0].children)
         return False, None, None, None, None
 
     def _instances_to_queryset(self, instances):
@@ -378,15 +324,19 @@ class CachedManager(models.Manager):
         cached_qs, uncached_values, field = cache_result
         if uncached_values:
             db_filter = {f"{field}__in": uncached_values}
-            if kwargs:
-                db_qs = super().filter(**{f"{field}__in": uncached_values})
-            else:
-                db_qs = super().filter(Q(**{f"{field}__in": uncached_values}))
-            for instance in db_qs:
+            db_qs = super().filter(**db_filter)
+            
+            db_instances = list(db_qs)
+            for instance in db_instances:
                 cache_key = get_cache_key(self.model, self._normalize_value(getattr(instance, field)))
                 cache.set(cache_key, instance, timeout=None)
                 logger.debug("Cached instance %s after DB lookup", cache_key)
-            cached_qs = cached_qs | db_qs
+            # Combine cached and DB instances into a single QuerySet
+            if cached_qs:
+                all_instances = cached_qs._result_cache + db_instances
+            else:
+                all_instances = db_instances
+            cached_qs = self._instances_to_queryset(all_instances)
 
         return cached_qs
 
@@ -415,10 +365,12 @@ class CachedManager(models.Manager):
         cached_qs, uncached_values, field = cache_result
         if uncached_values:
             db_qs = self.filter(**{f"{field}__in": uncached_values})
-            for instance in db_qs:
+            db_instances = list(db_qs)
+            for instance in db_instances:
                 cache_key = get_cache_key(self.model, self._normalize_value(getattr(instance, field)))
                 cache.set(cache_key, instance, timeout=None)
-            cached_qs = cached_qs | db_qs
+            all_instances = cached_qs._result_cache + db_instances
+            cached_qs = self._instances_to_queryset(all_instances)
 
         return cached_qs
 
