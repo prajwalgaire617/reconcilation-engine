@@ -15,6 +15,7 @@ from django.core.cache import cache
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.files.storage import default_storage
 from django.db.models import Q
+from django.db.models.query import QuerySet
 from django.http import FileResponse
 from django.utils.translation import gettext as _
 from graphql import GraphQLError
@@ -25,7 +26,7 @@ from django.core.cache import caches
 
 logger = logging.getLogger(__file__)
 
-UNIQUE_FIELDS = ('pk', 'id', 'uuid')
+UNIQUE_FIELDS = {'pk', 'id', 'uuid'}
 CACHE_TIMEOUT = 3600 * 24
 cache = caches["default"]
 
@@ -215,65 +216,163 @@ def patient_category_mask(insuree, target_date):
     return mask
 
 
+
 class CachedManager(models.Manager):
-    
-    def get(self, *args, **kwargs):
-        """
-        Overrides the get() method to check Redis cache before
-        performing a DB lookup for simple unique lookups.
-        """
-        
-        cache_key = None
-        value = None
-        value_key = None
-        # Case 1: Simple kwargs lookup.
+    def _normalize_value(self, value):
+        """Normalize value for cache key."""
+        if isinstance(value, uuid.UUID):
+            return str(value)
+        try:
+            return int(value)
+        except (ValueError, TypeError):
+            return value
+
+    def _is_simple_lookup(self, args, kwargs):
+        """Check if query is a single exact or in lookup on unique fields."""
         if kwargs and len(kwargs) == 1:
             key = list(kwargs.keys())[0]
-            if key in UNIQUE_FIELDS:
-                value = kwargs[key]
-                value_key = key
-        # use case for Family Request elements in args
-        elif not kwargs and args and len(args) == 1 :
-            if len(args[0].children) == 1:
-                field, arg_value = args[0].children[0]
-                if field in UNIQUE_FIELDS:
-                    value = arg_value
-                    value_key = 'pk'
-        # checking if the key is the PK
-
-        if value_key == 'pk':
-            cache_key = get_cache_key(self.model, value)
-        elif value:
-            field = self.model._meta.get_field(value_key) 
-            if not field.primary_key:
-                # we get the unique fields / pk conversion if exist
-                value = get_cache_key(self.model, kwargs[key])
-        # Convert UUID objects to string for the cache key.
-            if isinstance(value, uuid.UUID):
-                value = str(value)
+            field = key.split('__')[0] if '__' in key else key
+            lookup = key.split('__')[-1] if '__' in key else 'exact'
+            return field in UNIQUE_FIELDS and lookup in {'exact', 'in'}, key, kwargs.get(key), field, lookup
+        elif args and len(args) == 1 and isinstance(args[0], Q):
+            if len(args[0].children) == 1 and isinstance(args[0].children[0], tuple):
+                field, value = args[0].children[0]
+                lookup = field.split('__')[-1] if '__' in field else 'exact'
+                field = field.split('__')[0]
+                return field in UNIQUE_FIELDS and lookup in {'exact', 'in'}, field, value, field, lookup
             else:
-                try:
-                    # Convert to int if possible.
-                    value = int(value)
-                except (ValueError, TypeError):
-                    pass
-            cache_key = get_cache_key(self.model, value)
-        # If we constructed a cache key, try to retrieve from the cache.
-        if cache_key:
+                logger.debug("Complex Q object detected: %s", args[0].children)
+        return False, None, None, None, None
+
+    def _instances_to_queryset(self, instances):
+        """Convert a list of model instances to a QuerySet without hitting the database."""
+        if not instances:
+            return self.get_queryset().none()
+        qs = self.get_queryset().filter(pk__in=[instance.pk for instance in instances])
+        qs._result_cache = list(instances)
+        return qs
+
+    def _handle_cache_lookup(self, field, value, lookup):
+        """Handle cache lookup for exact or in queries."""
+        if lookup == 'exact':
+            cache_key = get_cache_key(self.model, self._normalize_value(value))
             cached_instance = cache.get(cache_key)
-            if cached_instance is not None:
+            if cached_instance:
                 if not isinstance(cached_instance, self.model):
-                    logger.error("wrong model for cached instance for key: %s", cache_key)
-                logger.debug("Returning cached instance for key: %s", cache_key)
-                return cached_instance
+                    logger.error("Wrong model for cached instance: %s", cache_key)
+                    return None
+                logger.debug("Cache hit for key: %s", cache_key)
+                return self._instances_to_queryset([cached_instance])
+            return None
 
-            # Not in cache; perform DB lookup.
-        instance = super().get(*args, **kwargs)
-        cache.set(cache_key, instance, timeout=None)
-        logger.debug("Cached instance %s after DB lookup", cache_key)
-        return instance
+        if lookup == 'in':
+            if not isinstance(value, (list, tuple, set)):
+                return None
+            values = [self._normalize_value(v) for v in value]
+            cache_keys = [get_cache_key(self.model, v) for v in values]
+            cached_results = cache.get_many(cache_keys)
+            cached_instances = []
+            uncached_values = []
 
+            for v, ck in zip(values, cache_keys):
+                instance = cached_results.get(ck)
+                if instance:
+                    if isinstance(instance, self.model):
+                        cached_instances.append(instance)
+                        logger.debug("Cache hit for key: %s", ck)
+                    else:
+                        logger.error("Wrong model for cached instance: %s", ck)
+                        uncached_values.append(v)
+                else:
+                    uncached_values.append(v)
 
+            qs = self.get_queryset().none()
+            if cached_instances:
+                qs = self._instances_to_queryset(cached_instances)
+            return qs, uncached_values, field
+
+        return None
+
+    def filter(self, *args, **kwargs):
+        """
+        Overrides filter() to use cache for single exact or in lookups on pk, id, or uuid.
+        Returns a QuerySet to support chaining without unnecessary DB queries.
+        """
+        is_simple, key, value, field, lookup = self._is_simple_lookup(args, kwargs)
+        if not is_simple:
+            return super().filter(*args, **kwargs)
+
+        # Try cache lookup
+        cache_result = self._handle_cache_lookup(field, value, lookup)
+        if cache_result is None:
+            # Fallback to default filter for invalid lookups or cache miss
+            return super().filter(*args, **kwargs)
+
+        if lookup == 'exact':
+            cached_qs = cache_result
+            if cached_qs is not None:
+                return cached_qs
+            # Cache miss, query DB and cache
+            qs = super().filter(*args, **kwargs)
+            if qs.exists():
+                instance = qs.first()
+                cache.set(get_cache_key(self.model, self._normalize_value(value)), instance, timeout=None)
+                logger.debug("Cached instance %s after DB lookup", get_cache_key(self.model, value))
+            return qs
+
+        # Handle in lookup
+        cached_qs, uncached_values, field = cache_result
+        if uncached_values:
+            db_filter = {f"{field}__in": uncached_values}
+            db_qs = super().filter(**db_filter)
+            
+            db_instances = list(db_qs)
+            for instance in db_instances:
+                cache_key = get_cache_key(self.model, self._normalize_value(getattr(instance, field)))
+                cache.set(cache_key, instance, timeout=None)
+                logger.debug("Cached instance %s after DB lookup", cache_key)
+            # Combine cached and DB instances into a single QuerySet
+            if cached_qs:
+                all_instances = cached_qs._result_cache + db_instances
+            else:
+                all_instances = db_instances
+            cached_qs = self._instances_to_queryset(all_instances)
+
+        return cached_qs
+
+    def get_from_cache(self, **kwargs):
+        """
+        Utility method to fetch instances from cache or DB using ORM-like syntax.
+        Returns a QuerySet.
+        """
+        is_simple, key, value, field, lookup = self._is_simple_lookup((), kwargs)
+        if not is_simple:
+            return self.filter(**kwargs)
+
+        cache_result = self._handle_cache_lookup(field, value, lookup)
+        if cache_result is None:
+            return self.filter(**kwargs)
+
+        if lookup == 'exact':
+            cached_qs = cache_result
+            if cached_qs is not None:
+                return cached_qs
+            qs = self.filter(**kwargs)
+            if qs.exists():
+                cache.set(get_cache_key(self.model, self._normalize_value(value)), qs.first(), timeout=None)
+            return qs
+
+        cached_qs, uncached_values, field = cache_result
+        if uncached_values:
+            db_qs = self.filter(**{f"{field}__in": uncached_values})
+            db_instances = list(db_qs)
+            for instance in db_instances:
+                cache_key = get_cache_key(self.model, self._normalize_value(getattr(instance, field)))
+                cache.set(cache_key, instance, timeout=None)
+            all_instances = cached_qs._result_cache + db_instances
+            cached_qs = self._instances_to_queryset(all_instances)
+
+        return cached_qs
 
 
 class CachedModelMixin():
@@ -283,11 +382,9 @@ class CachedModelMixin():
         """
         cache.set(get_cache_key(self.__class__, self.pk), self,  timeout=CACHE_TIMEOUT)
         for f in UNIQUE_FIELDS:
-
             # get_field raised an error on property raise 
             if self.pk != getattr(self,f, self.pk):
                 cache.set(get_cache_key(self.__class__, getattr(self,f)), self.pk,  timeout=CACHE_TIMEOUT)
-
         logger.debug("Saved and cached instance: %s", self)
         
     def delete_cache(self):
@@ -383,7 +480,6 @@ def insert_role_right_for_system(system_role, right_id, apps):
             system_role,
         )
     else:
-
         for existing_role in existing_roles:
             role_rights = RoleRight.objects.filter(
                 role=existing_role, right_id=right_id
@@ -394,7 +490,6 @@ def insert_role_right_for_system(system_role, right_id, apps):
                     right_id=right_id,
                     validity_from=datetime.datetime.now()
                 )
-
 
 
 def remove_role_right_for_system(system_role, right_id, apps):
