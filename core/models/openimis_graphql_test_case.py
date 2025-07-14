@@ -13,6 +13,8 @@ from graphql_jwt.shortcuts import get_token as get_token_jwt
 from rest_framework.request import Request as DRFRequest
 from django.contrib.auth.models import AnonymousUser
 from django.contrib.sessions.backends.db import SessionStore
+from django.core.cache import cache
+
 
 logger = logging.getLogger(__name__)
 
@@ -255,3 +257,8 @@ class openIMISGraphQLTestCase(GraphQLTestCase):
             f"{k}:{wrap_arg(v)}" for k, v in params.items() if v is not None
         ]
         return ", ".join(params_as_args)
+    def tearDwon(self):
+        cache.clear()
+        super().tearDwon()
+
+        

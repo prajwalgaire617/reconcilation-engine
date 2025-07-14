@@ -60,22 +60,29 @@ def create_test_interactive_user(username='TestInteractiveTest', password="S\\:\
         roles = [7, 1, 2, 3, 4, 5, 6]
     user = None
     i_user = InteractiveUser.objects.filter(login_name=username).first()
+    
     if i_user:
         # TODO add custom prop to existing user
         user = User.objects.filter(i_user=i_user).first()
     else:
-        i_user = InteractiveUser.objects.create(
-            **{
-                "language_id": "en",
-                "last_name": "TestLastName",
-                "other_names": "Test Other Names",
-                "login_name": username,
-                "audit_user_id": -1,
-                "role_id": roles[0],
-                **custom_props
-            }
-        )
-        
+        user = User.objects.filter(
+            username=username,
+        ).first()
+        if user and user.i_user:
+           i_user = user.i_user
+        else:
+            i_user = InteractiveUser.objects.create(
+                **{
+                    "language_id": "en",
+                    "last_name": "TestLastName",
+                    "other_names": "Test Other Names",
+                    "login_name": username,
+                    "audit_user_id": -1,
+                    "role_id": roles[0],
+                    **custom_props
+                }
+            )
+   
     if not user:
         user = User.objects.create(
             username=username,
@@ -190,7 +197,7 @@ def AssertMutation(test_obj, mutation_uuid, token):
 
 class LogInHelper:
     def __init__(self):
-        self.test_user_name = "TestUserTest2"
+        self.test_user_name = "Admin"
         self.test_user_password = "TestPasswordTest2@"
         self.test_data_user = {
             "username": self.test_user_name,
