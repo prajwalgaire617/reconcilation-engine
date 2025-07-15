@@ -14,7 +14,8 @@ class gqlTest(openIMISGraphQLTestCase):
     def setUpClass(cls):
         super().setUpClass()
         cls.admin_user = create_test_interactive_user(username=cls.admin_username, password=cls.admin_password)
-        cls.admin_token = BaseTestContext(user=cls.admin_user).get_jwt()
+        cls.admin_token_context = BaseTestContext(user=cls.admin_user)
+        cls.admin_token = cls.admin_token_context.get_jwt()
         cls.disctict = Location.objects.filter(type='D', *filter_validity()).first()
     
     def test_login_successful(self):

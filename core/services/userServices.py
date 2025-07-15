@@ -258,6 +258,7 @@ def set_user_password(request, username, token, password):
 
 
 def user_authentication(request, username, password):
+    user = None
     if not username or not password:
         raise exceptions.ParseError(_("Missing username or password"))
     try:
@@ -267,11 +268,12 @@ def user_authentication(request, username, password):
         user = authenticate(request, username=username, password=password)
     except Exception as exc:
         logger.debug(f"Authentication failed for username: {username}:{exc}")
-    if not user and not User.objects.filter(username=username).exists():
+        
+    if not user and not User.objects.filter(username__iexact=username).exists():
         user, provisioned = UserManager().auto_provision_user(username=username)
         if provisioned:
             logger.debug(f"user {username} was automatically provisioned")
-        if user and user.check_password(password):
+        if user and user.i_user.check_password(password):
             return user
         else:
             logger.debug(f"Authentication failed for username: {username}")

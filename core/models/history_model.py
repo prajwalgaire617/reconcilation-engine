@@ -107,9 +107,9 @@ class HistoryModel(DirtyFieldsMixin,CachedModelMixin, models.Model):
             self.user_updated = user
             self.date_created = now
             self.date_updated = now
-            instance = super(HistoryModel, self).save(*args, **kwargs)
+            result = super(HistoryModel, self).save(*args, **kwargs)
             self.update_cache()
-            return instance
+            return result
         if self.is_dirty(check_relationship=True):
             if not self.user_created:
                 past = self.objects.filter(pk=self.id).first()
@@ -128,9 +128,9 @@ class HistoryModel(DirtyFieldsMixin,CachedModelMixin, models.Model):
             if hasattr(self, "replacement_uuid"):
                 if self.replacement_uuid is not None and 'replacement_uuid' not in self.get_dirty_fields():
                     raise ValidationError('Update error! You cannot update replaced entity')
-            instance = super(HistoryModel, self).save(*args, **kwargs)  
+            result = super(HistoryModel, self).save(*args, **kwargs)  
             self.update_cache()
-            return instance  
+            return result  
         else:
             raise ValidationError('Record has not be updated - there are no changes in fields')
 
@@ -157,10 +157,10 @@ class HistoryModel(DirtyFieldsMixin,CachedModelMixin, models.Model):
                 replaced_entity = self.__class__.objects.filter(replacement_uuid=self.id).first()
                 if replaced_entity:
                     replaced_entity.replacement_uuid = None
-                    replaced_entity.save(username="admin")
-            instance = super(HistoryModel, self).save(*args, **kwargs)
-            self.delete_cache()
-            return instance  
+                    replaced_entity.save(user=user)
+            result = super(HistoryModel, self).save(*args, **kwargs)
+            self.update_cache()
+            return result  
         else:
             raise ValidationError(
                 'Record has not be deactivating, the object is different and must be updated before deactivating')
@@ -235,7 +235,7 @@ class HistoryBusinessModel(HistoryModel):
             [setattr(new_entity, key, data[key]) for key in data]
         if self.date_valid_from is None:
             raise ValidationError('Field date_valid_from should not be empty')
-        new_entity.save(username=user.username)
+        new_entity.save(user=user)
         return new_entity
 
     def _update_replaced_entity(self, user, uuid_from_new_entity, date_valid_from_new_entity):
@@ -253,8 +253,7 @@ class HistoryBusinessModel(HistoryModel):
             else:
                 self.date_valid_to = date_valid_from_new_entity
             self.replacement_uuid = uuid_from_new_entity
-            self.save(username=user.username)
-            self.delete_cache()
+            self.save(user=user)
             return self
         else:
             raise ValidationError("Object is changed - it must be updated before being replaced")

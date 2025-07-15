@@ -9,6 +9,7 @@ from django.dispatch import receiver
 import logging
 import uuid
 from datetime import datetime
+from core.models import InteractiveUser
 
 logger = logging.getLogger(__file__)
 
@@ -16,8 +17,9 @@ logger = logging.getLogger(__file__)
 @receiver(token_issued)
 def on_token_issued(sender, request, user, **kwargs):
     # Store the date on which the user got the auth token
-    user.last_login = timezone.now()
-    user.save()
+    if user.i_user:
+        user.i_user.last_login = timezone.now()
+        user.i_user.save()
     pass
 
 
@@ -57,8 +59,8 @@ def jwt_decode_user_key(token, context=None):
             .filter(username=not_validated.get("username")) \
             .only("i_user__private_key") \
             .first()
-        if db_user and db_user.private_key:
-            key = db_user.private_key
+        if db_user and db_user.i_user and db_user.i_user.private_key:
+            key = db_user.i_user.private_key
         else:
             key = get_jwt_key(encode=False)
     else:
@@ -86,20 +88,21 @@ def get_jwt_key(encode=True, context=None, payload=None):
         return user_key
 
     if encode:
-        return getattr(jwt_settings, "JWT_PRIVATE_KEY", jwt_settings.JWT_SECRET_KEY)
+        return getattr(jwt_settings, "JWT_PRIVATE_KEY", None) or  jwt_settings.JWT_SECRET_KEY
     else:
-        return getattr(jwt_settings, "JWT_PUBLIC_KEY", jwt_settings.JWT_SECRET_KEY)
+        return getattr(jwt_settings, "JWT_PUBLIC_KEY", None) or jwt_settings.JWT_SECRET_KEY
 
 
 def extract_private_key_from_payload(payload):
     # Get user private key from payload. This covers the refresh token mutation
-    from core.models import User
 
     if "username" in payload:
-        return User.objects.get(username=payload["username"]).private_key
+        user =  InteractiveUser.objects.get(login_name=payload["username"])
+        if user:
+            return user.private_key
 
 
 def extract_private_key_from_context(context):
-    if context and context.user and hasattr(context.user, "private_key"):
-        return context.user.private_key
+    if context and context.user and hasattr(context.user, 'i_user') and hasattr(context.user.i_user, "private_key"):
+        return context.user.i_user.private_key
     return None

@@ -19,7 +19,7 @@ from django.contrib.auth.password_validation import validate_password
 #from core.datetimes.ad_datetime import datetime as py_datetime
 from django.conf import settings
 
-from ..utils import filter_validity
+from ..utils import filter_validity, CachedManager
 from .base import *
 from .versioned_model import *
 from core.utils import get_first_or_default_language
@@ -28,8 +28,9 @@ logger = logging.getLogger(__name__)
 from rest_framework import exceptions
 
 
-class UserManager(BaseUserManager):
-
+class UserManager(BaseUserManager, CachedManager):
+    UNIQUE_FIELDS = {'pk', 'uuid', 'id', 'username'}
+    CACHED_FK = {'i_user'}
     def _create_core_user(self, **fields):
         user = User(**fields)
         user.save()
@@ -49,19 +50,21 @@ class UserManager(BaseUserManager):
     def create_superuser(self, username, password=None, email=None, **extra_fields):
         extra_fields['is_staff'] = True
         extra_fields['is_superuser'] = True
-        self._create_tech_user(username, email, password, **extra_fields)
+        user = self._create_tech_user(username, email, password, **extra_fields)
+            
 
     def auto_provision_user(self, **kwargs):
         # only auto-provision django user if registered as interactive user
-        try:
-            i_user = InteractiveUser.objects.get(
-                login_name=kwargs['username'],
-                *filter_validity())
-        except InteractiveUser.DoesNotExist as e:
-            raise exceptions.AuthenticationFailed("INCORRECT_CREDENTIALS") from e
+        username = kwargs.get('username', kwargs.get('login_name', None) ) 
+        if  not username:
+            raise exceptions.AuthenticationFailed("INCORRECT_CREDENTIALS")
+        i_user = InteractiveUser.objects.filter(
+                login_name__iexact=username,
+                *filter_validity()).first()
+        if not i_user:
+            raise exceptions.AuthenticationFailed("INCORRECT_CREDENTIALS")
+        kwargs['i_user'] = i_user
         user = self._create_core_user(**kwargs)
-        user.i_user = i_user
-        user.save()
         if core.auto_provisioning_user_group:
             group = Group.objects.filter(
                 name=core.auto_provisioning_user_group).first()
@@ -73,11 +76,16 @@ class UserManager(BaseUserManager):
         return user, True
 
     def get_or_create(self, **kwargs):
-        user = User.objects.filter(username__iexact=kwargs.get("username")).first()
-        if user:
-            return user, False
-        else:
-            return self.auto_provision_user(**kwargs)
+        if 'username' in kwargs:
+            user = User.objects.filter(username__iexact=kwargs.get("username")).first()
+            if user:
+                return user, False
+        
+        return self.auto_provision_user(**kwargs)
+    
+    def get_queryset(self):
+        return super().get_queryset().prefetch_related('i_user')
+    
 
 
 class TechnicalUser(AbstractBaseUser):
@@ -190,6 +198,7 @@ class RoleRight(VersionedModel):
 
 
 class InteractiveUser(VersionedModel):
+    USE_CACHE = not settings.IS_TESTING
     id = models.AutoField(db_column="UserID", primary_key=True)
     uuid = models.CharField(db_column="UserUUID", max_length=36, default=uuid.uuid4, unique=True)
     language = models.ForeignKey(Language, models.DO_NOTHING, db_column="LanguageID")
@@ -377,7 +386,7 @@ class InteractiveUser(VersionedModel):
     @classmethod
     def get_queryset(cls, queryset, user):
         if isinstance(user, ResolveInfo):
-            user = user.context.user
+            user = user.context.user.i_user
         if settings.ROW_SECURITY and user.is_anonymous:
             return queryset.filter(id=-1)
         return queryset
@@ -386,7 +395,192 @@ class InteractiveUser(VersionedModel):
         managed = True
         db_table = 'tblUsers'
 
+class Officer(VersionedModel, ExtendableModel):
+    id = models.AutoField(db_column='OfficerID', primary_key=True)
+    uuid = models.CharField(db_column='OfficerUUID',
+                            max_length=36, default=uuid.uuid4, unique=True)
+    code = models.CharField(db_column='Code', max_length=50)
+    last_name = models.CharField(db_column='LastName', max_length=100)
+    other_names = models.CharField(db_column='OtherNames', max_length=100)
+    dob = models.DateField(db_column='DOB', blank=True, null=True)
+    phone = models.CharField(db_column='Phone', max_length=50, blank=True, null=True)
+    location = models.ForeignKey('location.Location', models.DO_NOTHING, db_column='LocationId', blank=True, null=True)
+    substitution_officer = models.ForeignKey('self', models.DO_NOTHING, db_column='OfficerIDSubst', blank=True,
+                                             null=True)
+    works_to = models.DateTimeField(db_column='WorksTo', blank=True, null=True)
+    veo_code = models.CharField(db_column='VEOCode', max_length=50, blank=True, null=True)
+    veo_last_name = models.CharField(db_column='VEOLastName', max_length=100, blank=True, null=True)
+    veo_other_names = models.CharField(db_column='VEOOtherNames', max_length=100, blank=True, null=True)
+    veo_dob = models.DateField(db_column='VEODOB', blank=True, null=True)
+    veo_phone = models.CharField(db_column='VEOPhone', max_length=25, blank=True, null=True)
+    audit_user_id = models.IntegerField(db_column='AuditUserID')
+    # rowid = models.TextField(db_column='RowID', blank=True, null=True)   This field type is a guess.
+    email = models.CharField(db_column='EmailId', max_length=200, blank=True, null=True)
+    phone_communication = models.BooleanField(db_column='PhoneCommunication', blank=True, null=True)
+    address = models.CharField(db_column="permanentaddress", max_length=100, blank=True, null=True)
+    has_login = models.BooleanField(db_column='HasLogin', blank=True, null=True)
 
+    # user = models.ForeignKey(User, db_column='UserID', blank=True, null=True, on_delete=models.CASCADE)
+
+    def name(self):
+        return " ".join(n for n in [self.last_name, self.other_names] if n is not None)
+
+    def __str__(self):
+        return "[%s] %s" % (self.code, self.name())
+
+    @property
+    def id_for_audit(self):
+        return id
+
+    @property
+    def username(self):
+        return self.code
+
+    def get_username(self):
+        return self.code
+
+    @property
+    def is_staff(self):
+        return False
+
+    @property
+    def is_superuser(self):
+        return False
+
+    @cached_property
+    def rights(self):
+        return []
+
+    @cached_property
+    def rights_str(self):
+        return []
+
+    def set_password(self, raw_password):
+        raise NotImplementedError("Shouldn't set a password on an Officer")
+
+    def check_password(self, raw_password):
+        return False
+
+    @property
+    def officer_allowed_locations(self):
+        """
+        Returns uuid of all locations allowed for given officer
+        """
+        from location.models import OfficerVillage, Location
+        villages = OfficerVillage.objects\
+            .filter(officer=self, validity_to__isnull=True)
+        all_allowed_uuids = []
+        for village in villages:
+            allowed_uuids = [village.location.uuid]
+            parent = village.location.parent
+            while parent is not None:
+                allowed_uuids.append(parent.uuid)
+                parent = parent.parent
+            all_allowed_uuids.extend(allowed_uuids)
+        return Location.objects.filter(uuid__in=all_allowed_uuids)
+
+    @classmethod
+    def get_queryset(cls, queryset, user):
+        if isinstance(user, ResolveInfo):
+            user = user.context.user
+        if settings.ROW_SECURITY and user.is_anonymous:
+            return queryset.filter(id=-1)
+        return queryset
+
+    class Meta:
+        managed = True
+        db_table = 'tblOfficer'
+
+
+class ClaimAdmin(VersionedModel):
+    id = models.AutoField(db_column='ClaimAdminId', primary_key=True)
+    uuid = models.CharField(db_column='ClaimAdminUUID',
+                            max_length=36, default=uuid.uuid4, unique=True)
+
+    code = models.CharField(db_column='ClaimAdminCode', max_length=50,
+                            blank=True, null=True)
+    last_name = models.CharField(
+        db_column='LastName', max_length=100, blank=True, null=True)
+    other_names = models.CharField(
+        db_column='OtherNames', max_length=100, blank=True, null=True)
+    dob = models.DateField(db_column='DOB', blank=True, null=True)
+    email_id = models.CharField(
+        db_column='EmailId', max_length=200, blank=True, null=True)
+    phone = models.CharField(
+        db_column='Phone', max_length=50, blank=True, null=True)
+    health_facility = models.ForeignKey(
+        "location.HealthFacility", models.DO_NOTHING, db_column='HFId', blank=True, null=True)
+    has_login = models.BooleanField(
+        db_column='HasLogin', blank=True, null=True)
+
+    audit_user_id = models.IntegerField(
+        db_column='AuditUserId', blank=True, null=True)
+    # row_id = models.BinaryField(db_column='RowId', blank=True, null=True)
+
+    def __str__(self):
+        return self.code + " " + self.last_name + " " + self.other_names
+
+    @classmethod
+    def get_queryset(cls, queryset, user):
+        queryset = cls.filter_queryset(queryset)
+        # GraphQL calls with an info object while Rest calls with the user itself
+        if isinstance(user, ResolveInfo):
+            user = user.context.user
+        if settings.ROW_SECURITY and user.is_anonymous:
+            return queryset.filter(id=-1)
+        if settings.ROW_SECURITY:
+            from location.schema import LocationManager
+            queryset = LocationManager().build_user_location_filter_query(
+                user._u, prefix='health_facility__location', queryset=queryset, loc_types=['D'])
+        return queryset
+
+    @property
+    def id_for_audit(self):
+        return self.audit_user_id
+
+    @property
+    def username(self):
+        return self.code
+
+    def get_username(self):
+        return self.code
+
+    @property
+    def is_staff(self):
+        return False
+
+    @property
+    def is_superuser(self):
+        return False
+
+    def set_password(self, raw_password):
+        raise NotImplementedError("Shouldn't set a password on an Officer")
+
+    def check_password(self, raw_password):
+        return False
+
+    @property
+    def officer_allowed_locations(self):
+        """
+        Returns uuid of all locations allowed for given officerLocationManager
+        """
+        district = self.health_facility.location
+        all_allowed_uuids = [district.parent.uuid, district.uuid]
+        child_locations = location_models.Location.objects.filter(
+            parent=district).values_list('uuid', flat=True)
+        while child_locations:
+            all_allowed_uuids.extend(child_locations)
+            child_locations = location_models.Location.objects\
+                .filter(parent__uuid__in=child_locations)\
+                .values_list('uuid', flat=True)
+
+        return location_models.Location.objects.filter(uuid__in=all_allowed_uuids)
+
+    class Meta:
+        managed = True
+        db_table = 'tblClaimAdmin'
+
+    
 class UserRole(VersionedModel):
     id = models.AutoField(db_column='UserRoleID', primary_key=True)
     user = models.ForeignKey(
@@ -402,16 +596,23 @@ class UserRole(VersionedModel):
 
 
 class User(UUIDModel, PermissionsMixin, UUIDVersionedModel):
+    USE_CACHE = not settings.IS_TESTING
+
     username = models.CharField(unique=True, max_length=50)
     t_user = models.ForeignKey(TechnicalUser, on_delete=models.CASCADE, blank=True, null=True)
     i_user = models.ForeignKey(InteractiveUser, on_delete=models.CASCADE, blank=True, null=True)
-    officer = models.ForeignKey("Officer", on_delete=models.CASCADE, blank=True, null=True)
-    claim_admin = models.ForeignKey("ClaimAdmin", on_delete=models.CASCADE, blank=True, null=True)
+    officer = models.ForeignKey(Officer, on_delete=models.CASCADE, blank=True, null=True)
+    claim_admin = models.ForeignKey(ClaimAdmin, on_delete=models.CASCADE, blank=True, null=True)
 
     USERNAME_FIELD = 'username'
     REQUIRED_FIELDS = []
 
     objects = UserManager()
+    
+    def check_password(self, *args, **kwargs):
+        if self._u:
+            return self._u.check_password( *args, **kwargs)
+        return False
 
     def save_history(self, **kwargs):
         # Prevent from saving history. It would lead to error due to username uniqueness.
@@ -426,6 +627,10 @@ class User(UUIDModel, PermissionsMixin, UUIDVersionedModel):
     @property
     def _u(self):
         return self.i_user or self.officer or self.claim_admin or self.t_user
+    
+    @property
+    def language(self):
+        return self._u.langage if self._u else None 
 
     def has_perms(self, perm_list, obj=None, list_evaluation_or=True):
         if not perm_list:
@@ -596,103 +801,7 @@ class UserGroup(models.Model):
         unique_together = (('user', 'group'),)
 
 
-class Officer(VersionedModel, ExtendableModel):
-    id = models.AutoField(db_column='OfficerID', primary_key=True)
-    uuid = models.CharField(db_column='OfficerUUID',
-                            max_length=36, default=uuid.uuid4, unique=True)
-    code = models.CharField(db_column='Code', max_length=50)
-    last_name = models.CharField(db_column='LastName', max_length=100)
-    other_names = models.CharField(db_column='OtherNames', max_length=100)
-    dob = models.DateField(db_column='DOB', blank=True, null=True)
-    phone = models.CharField(db_column='Phone', max_length=50, blank=True, null=True)
-    location = models.ForeignKey('location.Location', models.DO_NOTHING, db_column='LocationId', blank=True, null=True)
-    substitution_officer = models.ForeignKey('self', models.DO_NOTHING, db_column='OfficerIDSubst', blank=True,
-                                             null=True)
-    works_to = models.DateTimeField(db_column='WorksTo', blank=True, null=True)
-    veo_code = models.CharField(db_column='VEOCode', max_length=50, blank=True, null=True)
-    veo_last_name = models.CharField(db_column='VEOLastName', max_length=100, blank=True, null=True)
-    veo_other_names = models.CharField(db_column='VEOOtherNames', max_length=100, blank=True, null=True)
-    veo_dob = models.DateField(db_column='VEODOB', blank=True, null=True)
-    veo_phone = models.CharField(db_column='VEOPhone', max_length=25, blank=True, null=True)
-    audit_user_id = models.IntegerField(db_column='AuditUserID')
-    # rowid = models.TextField(db_column='RowID', blank=True, null=True)   This field type is a guess.
-    email = models.CharField(db_column='EmailId', max_length=200, blank=True, null=True)
-    phone_communication = models.BooleanField(db_column='PhoneCommunication', blank=True, null=True)
-    address = models.CharField(db_column="permanentaddress", max_length=100, blank=True, null=True)
-    has_login = models.BooleanField(db_column='HasLogin', blank=True, null=True)
 
-    # user = models.ForeignKey(User, db_column='UserID', blank=True, null=True, on_delete=models.CASCADE)
-
-    def name(self):
-        return " ".join(n for n in [self.last_name, self.other_names] if n is not None)
-
-    def __str__(self):
-        return "[%s] %s" % (self.code, self.name())
-
-    @property
-    def id_for_audit(self):
-        return id
-
-    @property
-    def username(self):
-        return self.code
-
-    def get_username(self):
-        return self.code
-
-    @property
-    def is_staff(self):
-        return False
-
-    @property
-    def is_superuser(self):
-        return False
-
-    @cached_property
-    def rights(self):
-        return []
-
-    @cached_property
-    def rights_str(self):
-        return []
-
-    def set_password(self, raw_password):
-        raise NotImplementedError("Shouldn't set a password on an Officer")
-
-    def check_password(self, raw_password):
-        return False
-
-    @property
-    def officer_allowed_locations(self):
-        """
-        Returns uuid of all locations allowed for given officer
-        """
-        from location.models import OfficerVillage, Location
-        villages = OfficerVillage.objects\
-            .filter(officer=self, validity_to__isnull=True)
-        all_allowed_uuids = []
-        for village in villages:
-            allowed_uuids = [village.location.uuid]
-            parent = village.location.parent
-            while parent is not None:
-                allowed_uuids.append(parent.uuid)
-                parent = parent.parent
-            all_allowed_uuids.extend(allowed_uuids)
-        return Location.objects.filter(uuid__in=all_allowed_uuids)
-
-    @classmethod
-    def get_queryset(cls, queryset, user):
-        if isinstance(user, ResolveInfo):
-            user = user.context.user
-        if settings.ROW_SECURITY and user.is_anonymous:
-            return queryset.filter(id=-1)
-        return queryset
-
-    class Meta:
-        managed = True
-        db_table = 'tblOfficer'
-
-    
 
 def _get_default_expire_date():
     return py_datetime.now() + timedelta(days=1)
@@ -702,92 +811,4 @@ def _query_export_path(instance, filename):
     # file will be uploaded to MEDIA_ROOT/user_<id>/<filename>
     return F'query_exports/user_{instance.user.uuid}/{filename}'
 
-
-class ClaimAdmin(VersionedModel):
-    id = models.AutoField(db_column='ClaimAdminId', primary_key=True)
-    uuid = models.CharField(db_column='ClaimAdminUUID',
-                            max_length=36, default=uuid.uuid4, unique=True)
-
-    code = models.CharField(db_column='ClaimAdminCode', max_length=50,
-                            blank=True, null=True)
-    last_name = models.CharField(
-        db_column='LastName', max_length=100, blank=True, null=True)
-    other_names = models.CharField(
-        db_column='OtherNames', max_length=100, blank=True, null=True)
-    dob = models.DateField(db_column='DOB', blank=True, null=True)
-    email_id = models.CharField(
-        db_column='EmailId', max_length=200, blank=True, null=True)
-    phone = models.CharField(
-        db_column='Phone', max_length=50, blank=True, null=True)
-    health_facility = models.ForeignKey(
-        "location.HealthFacility", models.DO_NOTHING, db_column='HFId', blank=True, null=True)
-    has_login = models.BooleanField(
-        db_column='HasLogin', blank=True, null=True)
-
-    audit_user_id = models.IntegerField(
-        db_column='AuditUserId', blank=True, null=True)
-    # row_id = models.BinaryField(db_column='RowId', blank=True, null=True)
-
-    def __str__(self):
-        return self.code + " " + self.last_name + " " + self.other_names
-
-    @classmethod
-    def get_queryset(cls, queryset, user):
-        queryset = cls.filter_queryset(queryset)
-        # GraphQL calls with an info object while Rest calls with the user itself
-        if isinstance(user, ResolveInfo):
-            user = user.context.user
-        if settings.ROW_SECURITY and user.is_anonymous:
-            return queryset.filter(id=-1)
-        if settings.ROW_SECURITY:
-            from location.schema import LocationManager
-            queryset = LocationManager().build_user_location_filter_query(
-                user._u, prefix='health_facility__location', queryset=queryset, loc_types=['D'])
-        return queryset
-
-    @property
-    def id_for_audit(self):
-        return self.audit_user_id
-
-    @property
-    def username(self):
-        return self.code
-
-    def get_username(self):
-        return self.code
-
-    @property
-    def is_staff(self):
-        return False
-
-    @property
-    def is_superuser(self):
-        return False
-
-    def set_password(self, raw_password):
-        raise NotImplementedError("Shouldn't set a password on an Officer")
-
-    def check_password(self, raw_password):
-        return False
-
-    @property
-    def officer_allowed_locations(self):
-        """
-        Returns uuid of all locations allowed for given officerLocationManager
-        """
-        district = self.health_facility.location
-        all_allowed_uuids = [district.parent.uuid, district.uuid]
-        child_locations = location_models.Location.objects.filter(
-            parent=district).values_list('uuid', flat=True)
-        while child_locations:
-            all_allowed_uuids.extend(child_locations)
-            child_locations = location_models.Location.objects\
-                .filter(parent__uuid__in=child_locations)\
-                .values_list('uuid', flat=True)
-
-        return location_models.Location.objects.filter(uuid__in=all_allowed_uuids)
-
-    class Meta:
-        managed = True
-        db_table = 'tblClaimAdmin'
 

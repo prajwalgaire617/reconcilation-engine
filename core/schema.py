@@ -1744,9 +1744,9 @@ def set_user_deleted(user):
 
 def change_user_language(user, language_id):
     try:
-        updated_user = User.objects.get(id=user.id)
-        updated_user.i_user.language_id = language_id
-        updated_user.i_user.save()
+        updated_user = InteractiveUser.objects.filter(user__id=user.id, *filter_validity()).first()
+        updated_user.language_id = language_id
+        updated_user.save()
     except Exception as exc:
         logger.error("[OpenIMISMutation] Failed to change user language for user %s: %s", user.id, str(exc))
         raise

@@ -8,6 +8,8 @@ from django.db import models
 from datetime import datetime as py_datetime
 import logging
 from django.core.exceptions import ValidationError
+from django.conf import settings
+
 
 logger = logging.getLogger(__name__)
 
@@ -37,7 +39,6 @@ class BaseModelValidation(ABC):
     def validate_delete(cls, user, **data):
         pass
 
-IS_TESTING =  'test' in sys.argv
 # enforce object validation on every save
 @receiver(pre_save)
 def validator(sender, instance, **kwargs):
@@ -63,7 +64,7 @@ def validator(sender, instance, **kwargs):
             instance.full_clean(validate_unique=False)
         except Exception as e:
             msg = f"Object {instance.__class__.__name__} is not respecting the mandatory fields: {e}"
-            if IS_TESTING:
+            if settings.IS_TESTING:
                 logger.error(msg)
             else:
                 raise ValidationError(msg)
