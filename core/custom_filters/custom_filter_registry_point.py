@@ -63,7 +63,14 @@ class CustomFilterRegistryPoint:
     ) -> None:
         if module_name not in cls.REGISTERED_CUSTOM_FILTER_WIZARDS:
             cls.REGISTERED_CUSTOM_FILTER_WIZARDS[f"{module_name}"] = []
-        cls.REGISTERED_CUSTOM_FILTER_WIZARDS[f"{module_name}"].append({
+
+        # Remove any existing entries with the same class name to support reload
+        cls.REGISTERED_CUSTOM_FILTER_WIZARDS[module_name] = [
+            entry for entry in cls.REGISTERED_CUSTOM_FILTER_WIZARDS[module_name]
+            if entry["class_reference"].__name__ != custom_filter_class.__name__
+        ]
+
+        cls.REGISTERED_CUSTOM_FILTER_WIZARDS[module_name].append({
             "class_reference": custom_filter_class,
             "module": module_name
         })
