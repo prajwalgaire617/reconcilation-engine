@@ -26,7 +26,7 @@ from django.core.cache import caches
 
 logger = logging.getLogger(__file__)
 
-CACHE_TIMEOUT = 3600 * 24
+
 cache = caches["default"]
 
 __all__ = [
@@ -473,19 +473,19 @@ def clean_fk(instance):
     return field_values
 
 class CachedModelMixin:
-    USE_CACHE = False
+    USE_CACHE = settings.CACHE_OBJECT_DEFAULT
     def update_cache(self):
         """
         Updates the cache for this object after saving.
         """
         if self.USE_CACHE:
-            cache.set(get_cache_key(self.__class__, self.pk), clean_fk(self), timeout=CACHE_TIMEOUT)
+            cache.set(get_cache_key(self.__class__, self.pk), clean_fk(self), timeout=settings.CACHE_OBJECT_TTL)
 
             unique_fields = getattr(self.__class__.objects, 'UNIQUE_FIELDS', {'id', 'uuid', 'pk'})
             for f in unique_fields:
                 # get_field raised an error on property raise 
                 if self.pk != getattr(self, f, self.pk):
-                    cache.set(get_cache_key(self.__class__, getattr(self, f)), self.pk, timeout=CACHE_TIMEOUT)
+                    cache.set(get_cache_key(self.__class__, getattr(self, f)), self.pk, timeout=settings.CACHE_OBJECT_TTL)
             logger.debug("Saved and cached instance: %s", self)
         
     def delete_cache(self):
