@@ -16,7 +16,7 @@ class HelpersTest(TestCase):
     def test_login_helper(self):
         count_before = InteractiveUser.objects.count()
         login_helper = LogInHelper()
-        user = login_helper.get_or_create_user_api()
+        user = login_helper.get_or_create_user_api(username="test_login_helper")
         self.assertTrue(type(user) is User)
         count_after = InteractiveUser.objects.count()
         self.assertEquals(count_after, count_before + 1)

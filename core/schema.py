@@ -64,7 +64,7 @@ from core.custom_filters import CustomFilterWizardStorage
 from core.gql_queries import RoleGQLType, RoleRightGQLType, UserGQLType, InteractiveUserGQLType, LanguageGQLType, \
     CustomFilterGQLType, ModulePermissionsListGQLType, OfficerGQLType, PermissionOpenImisGQLType, \
     ModulePermissionGQLType, CustomFilterOptionGQLType
-from core.utils import flatten_dict, ExtendedConnection, is_this_session_superuser
+from core.utils import flatten_dict, ExtendedConnection, is_this_session_superuser, collect_all_gql_permissions
 from core.models import ModuleConfiguration, FieldControl, MutationLog, Language, RoleMutation, UserMutation, User, \
     InteractiveUser, Role, RoleRight, ClaimAdmin
 from core.services.roleServices import check_role_unique_name
@@ -1077,40 +1077,31 @@ class Query(graphene.ObjectType):
             return gql_optimizer.query(RoleRight.objects.filter(validity_to__isnull=True), info)
 
     def resolve_modules_permissions(self, info, **kwargs):
+        """
+        GraphQL resolver to fetch permissions for all modules using the collected permissions dict.
+        Requires 'gql_query_roles_perms' permission.
+        """
+        from core.apps import CoreConfig  # Import here to avoid circular imports
+        
         if not info.context.user.has_perms(CoreConfig.gql_query_roles_perms):
             raise PermissionError("Unauthorized")
-        excluded_app = [
-            "health_check.cache", "health_check", "health_check.db",
-            "test_without_migrations", "test_without_migrations",
-            "rules", "graphene_django", "rest_framework",
-            "health_check.storage", "channels", "graphql_jwt.refresh_token.apps.RefreshTokenConfig"
-        ]
-        all_apps = [app for app in settings.INSTALLED_APPS if not app.startswith("django") and app not in excluded_app]
+
+        permissions_dict = collect_all_gql_permissions()
         config = []
-        for app in all_apps:
-            apps = __import__(f"{app}.apps")
-            is_default_cfg = hasattr(apps.apps, 'DEFAULT_CFG')
-            is_defaulf_config = hasattr(apps.apps, 'DEFAULT_CONFIG')
-            if is_default_cfg or is_defaulf_config:
-                if is_defaulf_config:
-                    config_dict = ModuleConfiguration.get_or_default(f"{app}", apps.apps.DEFAULT_CONFIG)
-                else:
-                    config_dict = ModuleConfiguration.get_or_default(f"{app}", apps.apps.DEFAULT_CFG)
-                permission = []
-                config_dict = flatten_dict(config_dict)
-                for key, value in config_dict.items():
-                    if key.endswith("_perms"):
-                        if isinstance(value, list):
-                            for val in value:
-                                permission.append(PermissionOpenImisGQLType(
-                                    perms_name=key,
-                                    perms_value=val,
-                                ))
+        for app, app_perms in permissions_dict.items():
+            permissions = []
+            for perm_name, perm_ids in app_perms.items():
+                permissions.extend([
+                    PermissionOpenImisGQLType(perms_name=perm_name, perms_value=perm_id)
+                    for perm_id in perm_ids
+                ])
+            if permissions:  # Only add modules with permissions
                 config.append(ModulePermissionGQLType(
                     module_name=app,
-                    permissions=permission,
+                    permissions=permissions
                 ))
-        return ModulePermissionsListGQLType(list(config))
+        
+        return ModulePermissionsListGQLType(permissions=config)
 
     def resolve_custom_filters(self, info, **kwargs):
         user = info.context.user

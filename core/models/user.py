@@ -22,7 +22,7 @@ from django.conf import settings
 from ..utils import filter_validity, CachedManager
 from .base import *
 from .versioned_model import *
-from core.utils import get_first_or_default_language
+from core.utils import get_first_or_default_language, to_list_permissions
 
 logger = logging.getLogger(__name__)
 from rest_framework import exceptions
@@ -283,9 +283,12 @@ class InteractiveUser(VersionedModel):
         rights = cache.get('rights_' + str(self.id))
         if rights:
             return rights
-        rights = [rr.right_id for rr in RoleRight.filter_queryset().filter(
-            role_id__in=[r.role_id for r in UserRole.filter_queryset().filter(
-                user_id=self.id)]).distinct()]
+        if self.is_superuser:
+            rights = to_list_permissions()
+        else:
+            rights = [rr.right_id for rr in RoleRight.filter_queryset().filter(
+                role_id__in=[r.role_id for r in UserRole.filter_queryset().filter(
+                    user_id=self.id)]).distinct()]
         cache.set('rights_' + str(self.id), rights, timeout=None)
         return rights
 
