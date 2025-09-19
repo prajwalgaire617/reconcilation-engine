@@ -8,23 +8,27 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('core', '0021_set_managed_to_true'),
+        ("core", "0021_set_managed_to_true"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='user',
-            name='legacy_id',
-            field=models.UUIDField(blank=True, db_column='LegacyID', null=True),
+            model_name="user",
+            name="legacy_id",
+            field=models.UUIDField(blank=True, db_column="LegacyID", null=True),
         ),
         migrations.AddField(
-            model_name='user',
-            name='validity_from',
-            field=core.fields.DateTimeField(db_column='ValidityFrom', default=datetime.datetime.now),
+            model_name="user",
+            name="validity_from",
+            field=core.fields.DateTimeField(
+                db_column="ValidityFrom", default=datetime.datetime.now
+            ),
         ),
         migrations.AddField(
-            model_name='user',
-            name='validity_to',
-            field=core.fields.DateTimeField(blank=True, db_column='ValidityTo', null=True),
+            model_name="user",
+            name="validity_to",
+            field=core.fields.DateTimeField(
+                blank=True, db_column="ValidityTo", null=True
+            ),
         ),
     ]

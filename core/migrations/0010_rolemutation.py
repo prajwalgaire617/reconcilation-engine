@@ -9,23 +9,58 @@ import django.db.models.deletion
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('core', '0009_mutationlog_client_mutation_details'),
+        ("core", "0009_mutationlog_client_mutation_details"),
     ]
 
     operations = [
         migrations.CreateModel(
-            name='RoleMutation',
+            name="RoleMutation",
             fields=[
-                ('id', models.AutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('validity_from', core.fields.DateTimeField(db_column='ValidityFrom', default=datetime.datetime.now)),
-                ('validity_to', core.fields.DateTimeField(blank=True, db_column='ValidityTo', null=True)),
-                ('legacy_id', models.IntegerField(blank=True, db_column='LegacyID', null=True)),
-                ('mutation', models.ForeignKey(on_delete=django.db.models.deletion.DO_NOTHING, related_name='roles', to='core.MutationLog')),
-                ('role', models.ForeignKey(on_delete=django.db.models.deletion.DO_NOTHING, related_name='mutations', to='core.Role')),
+                (
+                    "id",
+                    models.AutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                (
+                    "validity_from",
+                    core.fields.DateTimeField(
+                        db_column="ValidityFrom", default=datetime.datetime.now
+                    ),
+                ),
+                (
+                    "validity_to",
+                    core.fields.DateTimeField(
+                        blank=True, db_column="ValidityTo", null=True
+                    ),
+                ),
+                (
+                    "legacy_id",
+                    models.IntegerField(blank=True, db_column="LegacyID", null=True),
+                ),
+                (
+                    "mutation",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.DO_NOTHING,
+                        related_name="roles",
+                        to="core.MutationLog",
+                    ),
+                ),
+                (
+                    "role",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.DO_NOTHING,
+                        related_name="mutations",
+                        to="core.Role",
+                    ),
+                ),
             ],
             options={
-                'db_table': 'core_RoleMutation',
-                'managed': True,
+                "db_table": "core_RoleMutation",
+                "managed": True,
             },
         ),
     ]

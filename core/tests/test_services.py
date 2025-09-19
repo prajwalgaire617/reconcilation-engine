@@ -232,7 +232,10 @@ class UserServicesTest(TestCase):
         officer, created = create_or_update_officer(
             user_id=None,
             data=dict(
-                username=username, last_name="Last Name O1", other_names="Other 1 2 3", phone="+12345678"
+                username=username,
+                last_name="Last Name O1",
+                other_names="Other 1 2 3",
+                phone="+12345678",
             ),
             audit_user_id=999,
             connected=False,

@@ -30,16 +30,23 @@ class InteractiveUserSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = InteractiveUser
-        fields = ('id', 'language', 'last_name',
-                  'other_names', 'health_facility_id', 'rights', 'has_password')
+        fields = (
+            "id",
+            "language",
+            "last_name",
+            "other_names",
+            "health_facility_id",
+            "rights",
+            "has_password",
+        )
 
 
 class TechnicalUserSerializer(CachedModelSerializer):
     cache_ttl = 60 * 60
-    
+
     class Meta:
         model = TechnicalUser
-        fields = ('id', 'language', 'username', 'email')
+        fields = ("id", "language", "username", "email")
 
 
 class UserSerializer(serializers.ModelSerializer):
@@ -48,4 +55,4 @@ class UserSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = ('id', 'username', 'i_user', 't_user')
+        fields = ("id", "username", "i_user", "t_user")

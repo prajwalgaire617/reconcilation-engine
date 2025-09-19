@@ -1,3 +1,5 @@
+# flake8: noqa
+
 from core.validation.base import BaseModelValidation
 from core.validation.uniqueCodeValidationMixin import UniqueCodeValidationMixin
 from core.validation.objectExistsValidationMixin import ObjectExistsValidationMixin

@@ -1,5 +1,5 @@
 import unittest
-from core.custom_filters import CustomFilterWizardInterface, CustomFilterRegistryPoint  
+from core.custom_filters import CustomFilterWizardInterface, CustomFilterRegistryPoint
 
 
 class DummyCustomFilterA(CustomFilterWizardInterface):
@@ -17,36 +17,54 @@ class TestCustomFilterRegistryPoint(unittest.TestCase):
         CustomFilterRegistryPoint.REGISTERED_CUSTOM_FILTER_WIZARDS.clear()
 
     def test_register_single_filter(self):
-        CustomFilterRegistryPoint.register_custom_filters("test_module", [DummyCustomFilterA])
+        CustomFilterRegistryPoint.register_custom_filters(
+            "test_module", [DummyCustomFilterA]
+        )
 
         registered = CustomFilterRegistryPoint.REGISTERED_CUSTOM_FILTER_WIZARDS
         self.assertIn("test_module", registered)
         self.assertEqual(len(registered["test_module"]), 1)
-        self.assertEqual(registered["test_module"][0]["class_reference"], DummyCustomFilterA)
+        self.assertEqual(
+            registered["test_module"][0]["class_reference"], DummyCustomFilterA
+        )
 
     def test_register_multiple_filters(self):
-        CustomFilterRegistryPoint.register_custom_filters("test_module", [DummyCustomFilterA, DummyCustomFilterB])
+        CustomFilterRegistryPoint.register_custom_filters(
+            "test_module", [DummyCustomFilterA, DummyCustomFilterB]
+        )
 
-        registered = CustomFilterRegistryPoint.REGISTERED_CUSTOM_FILTER_WIZARDS["test_module"]
+        registered = CustomFilterRegistryPoint.REGISTERED_CUSTOM_FILTER_WIZARDS[
+            "test_module"
+        ]
         self.assertEqual(len(registered), 2)
         self.assertCountEqual(
             [entry["class_reference"] for entry in registered],
-            [DummyCustomFilterA, DummyCustomFilterB]
+            [DummyCustomFilterA, DummyCustomFilterB],
         )
 
     def test_register_overwrites_duplicate_class(self):
         # First registration
-        CustomFilterRegistryPoint.register_custom_filters("test_module", [DummyCustomFilterA])
+        CustomFilterRegistryPoint.register_custom_filters(
+            "test_module", [DummyCustomFilterA]
+        )
         # Simulate re-registering DummyCustomFilterA (e.g., on reload)
-        CustomFilterRegistryPoint.register_custom_filters("test_module", [DummyCustomFilterA])
+        CustomFilterRegistryPoint.register_custom_filters(
+            "test_module", [DummyCustomFilterA]
+        )
 
-        registered = CustomFilterRegistryPoint.REGISTERED_CUSTOM_FILTER_WIZARDS["test_module"]
+        registered = CustomFilterRegistryPoint.REGISTERED_CUSTOM_FILTER_WIZARDS[
+            "test_module"
+        ]
         self.assertEqual(len(registered), 1)
         self.assertEqual(registered[0]["class_reference"], DummyCustomFilterA)
 
     def test_register_same_class_in_different_modules(self):
-        CustomFilterRegistryPoint.register_custom_filters("module_a", [DummyCustomFilterA])
-        CustomFilterRegistryPoint.register_custom_filters("module_b", [DummyCustomFilterA])
+        CustomFilterRegistryPoint.register_custom_filters(
+            "module_a", [DummyCustomFilterA]
+        )
+        CustomFilterRegistryPoint.register_custom_filters(
+            "module_b", [DummyCustomFilterA]
+        )
 
         registered = CustomFilterRegistryPoint.REGISTERED_CUSTOM_FILTER_WIZARDS
         self.assertIn("module_a", registered)

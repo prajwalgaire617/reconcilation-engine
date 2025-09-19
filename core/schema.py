@@ -6,7 +6,6 @@ import sys
 import uuid
 
 import graphene
-from django.http import JsonResponse
 from django.utils.translation import gettext as _
 from copy import copy
 from datetime import datetime as py_datetime
@@ -15,15 +14,13 @@ from graphene_django import DjangoObjectType
 from functools import partial
 from promise import Promise
 
-from functools import reduce, wraps
+from functools import reduce
 from django.utils.translation import gettext_lazy
 from graphql.error import GraphQLError
 from graphene.types.generic import GenericScalar
 from graphql_jwt.mutations import JSONWebTokenMutation, mixins
 from graphql_jwt.decorators import login_required
-from django.http.response import HttpResponseForbidden
 import graphene_django_optimizer as gql_optimizer
-from graphene_django.views import HttpError
 from core.services import (
     create_or_update_interactive_user,
     create_or_update_core_user,
@@ -33,14 +30,13 @@ from core.services import (
     reset_user_password,
     set_user_password,
     user_authentication,
-    wait_for_mutation
+    wait_for_mutation,
 )
 from core.tasks import openimis_mutation_async
 from core import filter_validity, prefix_filterset
 from core.data_masking import anonymize_gql
 from django import dispatch
 from django.conf import settings
-from django.core.cache import cache
 from django.contrib.auth.models import AnonymousUser
 from django.core.exceptions import ValidationError, PermissionDenied
 from django.core.serializers.json import DjangoJSONEncoder
@@ -57,25 +53,52 @@ import graphql_jwt
 from axes.attempts import get_user_attempts
 from axes.handlers.database import AxesDatabaseHandler
 from axes.models import AccessAttempt
-from typing import Optional, List, Dict, Any
+from typing import List, Dict, Any
 
 from core.apps import CoreConfig
 from core.custom_filters import CustomFilterWizardStorage
-from core.gql_queries import RoleGQLType, RoleRightGQLType, UserGQLType, InteractiveUserGQLType, LanguageGQLType, \
-    CustomFilterGQLType, ModulePermissionsListGQLType, OfficerGQLType, PermissionOpenImisGQLType, \
-    ModulePermissionGQLType, CustomFilterOptionGQLType
-from core.utils import flatten_dict, ExtendedConnection, is_this_session_superuser, collect_all_gql_permissions
-from core.models import ModuleConfiguration, FieldControl, MutationLog, Language, RoleMutation, UserMutation, User, \
-    InteractiveUser, Role, RoleRight, ClaimAdmin
+from core.gql_queries import (
+    RoleGQLType,
+    RoleRightGQLType,
+    UserGQLType,
+    InteractiveUserGQLType,
+    LanguageGQLType,
+    CustomFilterGQLType,
+    ModulePermissionsListGQLType,
+    OfficerGQLType,
+    PermissionOpenImisGQLType,
+    ModulePermissionGQLType,
+    CustomFilterOptionGQLType,
+)
+from core.utils import (
+    ExtendedConnection,
+    is_this_session_superuser,
+    collect_all_gql_permissions,
+)
+from core.models import (
+    ModuleConfiguration,
+    FieldControl,
+    MutationLog,
+    Language,
+    RoleMutation,
+    UserMutation,
+    User,
+    InteractiveUser,
+    Role,
+    RoleRight,
+    ClaimAdmin,
+)
 from core.services.roleServices import check_role_unique_name
 from core.services.userServices import check_user_unique_email
-from core.validation.obligatoryFieldValidation import validate_payload_for_obligatory_fields
-from core.serializers import InteractiveUserSerializer
+from core.validation.obligatoryFieldValidation import (
+    validate_payload_for_obligatory_fields,
+)
 from location.gql_queries import HealthFacilityGQLType
 from django.apps import apps
+
 MAX_SMALLINT = 32767
 MIN_SMALLINT = -32768
-WEBAPP_EXPECTED_REQUESTED_WITH = 'webapp'
+WEBAPP_EXPECTED_REQUESTED_WITH = "webapp"
 
 core = sys.modules["core"]
 
@@ -145,20 +168,32 @@ class ParsedJSONString(graphene.JSONString):
     @staticmethod
     def parse_keys(input_dict, key_parser):
         if isinstance(input_dict, dict):
-            return {key_parser(k): ParsedJSONString.parse_keys(v, key_parser) if isinstance(v, dict) else v for k, v in
-                    input_dict.items()}
+            return {
+                key_parser(k): (
+                    ParsedJSONString.parse_keys(v, key_parser)
+                    if isinstance(v, dict)
+                    else v
+                )
+                for k, v in input_dict.items()
+            }
 
     @staticmethod
     def serialize(dt):
-        return ParsedJSONString.parse_keys(graphene.JSONString.serialize(dt), to_camel_case)
+        return ParsedJSONString.parse_keys(
+            graphene.JSONString.serialize(dt), to_camel_case
+        )
 
     @staticmethod
     def parse_literal(node):
-        return ParsedJSONString.parse_keys(graphene.JSONString.parse_literal(node), to_snake_case)
+        return ParsedJSONString.parse_keys(
+            graphene.JSONString.parse_literal(node), to_snake_case
+        )
 
     @staticmethod
     def parse_value(value):
-        return ParsedJSONString.parse_keys(graphene.JSONString.parse_value(value), to_snake_case)
+        return ParsedJSONString.parse_keys(
+            graphene.JSONString.parse_value(value), to_snake_case
+        )
 
 
 class OpenIMISJSONEncoder(DjangoJSONEncoder):
@@ -173,8 +208,13 @@ class OpenIMISJSONEncoder(DjangoJSONEncoder):
         return super().default(o)
 
 
-_mutation_signal_params = ["user", "mutation_module",
-                           "mutation_class", "mutation_log_id", "data"]
+_mutation_signal_params = [
+    "user",
+    "mutation_module",
+    "mutation_class",
+    "mutation_log_id",
+    "data",
+]
 signal_mutation = dispatch.Signal(_mutation_signal_params)
 signal_mutation_module_validate = {}
 signal_mutation_module_before_mutating = {}
@@ -182,9 +222,12 @@ signal_mutation_module_after_mutating = {}
 
 for module in sys.modules:
     signal_mutation_module_validate[module] = dispatch.Signal(_mutation_signal_params)
-    signal_mutation_module_before_mutating[module] = dispatch.Signal(_mutation_signal_params)
-    signal_mutation_module_after_mutating[module] = \
-        dispatch.Signal(_mutation_signal_params + ["error_messages"])
+    signal_mutation_module_before_mutating[module] = dispatch.Signal(
+        _mutation_signal_params
+    )
+    signal_mutation_module_after_mutating[module] = dispatch.Signal(
+        _mutation_signal_params + ["error_messages"]
+    )
 
 
 class OpenIMISMutation(graphene.relay.ClientIDMutation):
@@ -202,7 +245,8 @@ class OpenIMISMutation(graphene.relay.ClientIDMutation):
         client_mutation_label = graphene.String(max_length=255, required=False)
         client_mutation_details = graphene.List(graphene.String)
         mutation_extensions = ParsedJSONString(
-            description="Extension data to be used by signals. Will not be pushed to mutation implementation.")
+            description="Extension data to be used by signals. Will not be pushed to mutation implementation."
+        )
 
     @classmethod
     def coerce_mutation_data(cls, input_data, input_class=None):
@@ -226,34 +270,48 @@ class OpenIMISMutation(graphene.relay.ClientIDMutation):
                     coerced_list = []
                     for item in value:
                         if isinstance(inner_type, graphene.types.enum.EnumMeta):
-                            coerced_list.append(item)  # Append the item directly for enums
+                            coerced_list.append(
+                                item
+                            )  # Append the item directly for enums
                         elif isinstance(item, str):
-                            if type(inner_type) != graphene.types.structures.NonNull:
+                            if type(inner_type) is not graphene.types.structures.NonNull:
                                 coerced_list.append(inner_type.parse_value(item))
                             else:
                                 coerced_list.append(item)
-                        elif inner_type.__class__ == graphene.utils.subclass_with_meta.SubclassWithMeta_Meta:
-                            coerced_list.append(cls.coerce_mutation_data(item, input_class=inner_type))
+                        elif (
+                            inner_type.__class__
+                            == graphene.utils.subclass_with_meta.SubclassWithMeta_Meta
+                        ):
+                            coerced_list.append(
+                                cls.coerce_mutation_data(item, input_class=inner_type)
+                            )
                         else:
                             coerced_list.append(item)
                     coerced_data[key] = coerced_list
-                elif field.__class__ == graphene.types.field.Field and isinstance(field.type,
-                                                                                  graphene.types.enum.EnumMeta):
+                elif field.__class__ == graphene.types.field.Field and isinstance(
+                    field.type, graphene.types.enum.EnumMeta
+                ):
                     # If the field type is Enum
                     if hasattr(field.type, value):
                         coerced_data[key] = str(getattr(field.type, value).value)
                     else:
                         coerced_data[key] = value
-                elif field.__class__ == graphene.types.field.Field and isinstance(field.type,
-                                                                                  graphene.types.structures.NonNull) \
-                        and isinstance(field.type._of_type, graphene.types.enum.EnumMeta):
+                elif (
+                    field.__class__ == graphene.types.field.Field
+                    and isinstance(field.type, graphene.types.structures.NonNull)
+                    and isinstance(field.type._of_type, graphene.types.enum.EnumMeta)
+                ):
                     # If the field type is Enum
                     if hasattr(field.type._of_type, value):
-                        coerced_data[key] = str(getattr(field.type._of_type, value).value)
+                        coerced_data[key] = str(
+                            getattr(field.type._of_type, value).value
+                        )
                     else:
                         coerced_data[key] = value
                 elif field.__class__ == graphene.types.field.Field:
-                    coerced_data[key] = cls.coerce_mutation_data(value, input_class=field._type)
+                    coerced_data[key] = cls.coerce_mutation_data(
+                        value, input_class=field._type
+                    )
                 elif isinstance(value, str):
                     coerced_data[key] = field.parse_value(value)
                 else:
@@ -282,7 +340,10 @@ class OpenIMISMutation(graphene.relay.ClientIDMutation):
         user_agent = request.headers.get("User-Agent", "")
         current_session_key = request.session.session_key
         if not is_this_session_superuser(current_session_key):
-            if not any(bypass in user_agent for bypass in getattr(settings, "USER_AGENT_CSRF_BYPASS", [])):
+            if not any(
+                bypass in user_agent
+                for bypass in getattr(settings, "USER_AGENT_CSRF_BYPASS", [])
+            ):
                 csrf_middleware = CsrfViewMiddleware(lambda req: None)
                 reason = csrf_middleware.process_view(request, None, (), {})
                 if reason:
@@ -293,11 +354,11 @@ class OpenIMISMutation(graphene.relay.ClientIDMutation):
             user_id=info.context.user.id if info.context.user else None,
             client_mutation_id=data.get("client_mutation_id"),
             client_mutation_label=data.get("client_mutation_label"),
-            client_mutation_details=json.dumps(
-                data.get("client_mutation_details"), cls=OpenIMISJSONEncoder
-            )
-            if data.get("client_mutation_details")
-            else None,
+            client_mutation_details=(
+                json.dumps(data.get("client_mutation_details"), cls=OpenIMISJSONEncoder)
+                if data.get("client_mutation_details")
+                else None
+            ),
         )
         logger.debug(
             "OpenIMISMutation: saved as %s, type: %s, label: %s",
@@ -306,10 +367,10 @@ class OpenIMISMutation(graphene.relay.ClientIDMutation):
             mutation_log.client_mutation_label,
         )
         if (
-                info
-                and info.context
-                and info.context.user
-                and not info.context.user.is_anonymous
+            info
+            and info.context
+            and info.context.user
+            and not info.context.user.is_anonymous
         ):
             lang = info.context.user.language
             if isinstance(lang, Language):
@@ -348,54 +409,100 @@ class OpenIMISMutation(graphene.relay.ClientIDMutation):
                 return cls(internal_id=mutation_log.id)
 
             signal_mutation_module_before_mutating[cls._mutation_module].send(
-                sender=cls, mutation_log_id=mutation_log.id, data=data, user=info.context.user,
-                mutation_module=cls._mutation_module, mutation_class=cls.__name__
+                sender=cls,
+                mutation_log_id=mutation_log.id,
+                data=data,
+                user=info.context.user,
+                mutation_module=cls._mutation_module,
+                mutation_class=cls.__name__,
             )
-            logger.debug("[OpenIMISMutation %s] before mutate signal sent", mutation_log.id)
+            logger.debug(
+                "[OpenIMISMutation %s] before mutate signal sent", mutation_log.id
+            )
             if core.async_mutations:
-                logger.debug("[OpenIMISMutation %s] Sending async mutation", mutation_log.id)
+                logger.debug(
+                    "[OpenIMISMutation %s] Sending async mutation", mutation_log.id
+                )
                 openimis_mutation_async.delay(
-                    mutation_log.id, cls._mutation_module, cls.__name__)
+                    mutation_log.id, cls._mutation_module, cls.__name__
+                )
             else:
                 logger.debug("[OpenIMISMutation %s] mutating...", mutation_log.id)
                 try:
                     # mutation_data = data.copy()
-                    mutation_data = cls.coerce_mutation_data(json.loads(
-                        json.dumps(data, cls=OpenIMISJSONEncoder)))  # data.copy()
+                    mutation_data = cls.coerce_mutation_data(
+                        json.loads(json.dumps(data, cls=OpenIMISJSONEncoder))
+                    )  # data.copy()
                     mutation_data.pop("mutation_extensions", None)
                     messages = cls.async_mutate(
-                        info.context.user if info.context and info.context.user else None,
-                        **mutation_data)
+                        (
+                            info.context.user
+                            if info.context and info.context.user
+                            else None
+                        ),
+                        **mutation_data,
+                    )
                     # TODO this code is necessary for autogenerate functionality to work
                     # TODO General mutation code should be reworked
-                    if mutation_data.get('autogenerate', False) and isinstance(messages, Dict):
+                    if mutation_data.get("autogenerate", False) and isinstance(
+                        messages, Dict
+                    ):
                         data.update(messages)
                         error_messages = None
                     else:
                         error_messages = messages
                     if not error_messages:
-                        logger.debug("[OpenIMISMutation %s] marked as successful", mutation_log.id)
+                        logger.debug(
+                            "[OpenIMISMutation %s] marked as successful",
+                            mutation_log.id,
+                        )
                         mutation_log.mark_as_successful()
                     else:
-                        exceptions = [message.pop("exc") for message in error_messages if "exc" in message]
+                        exceptions = [
+                            message.pop("exc")
+                            for message in error_messages
+                            if "exc" in message
+                        ]
                         errors_json = json.dumps(error_messages)
-                        logger.error("[OpenIMISMutation %s] marked as failed: %s", mutation_log.id, errors_json)
+                        logger.error(
+                            "[OpenIMISMutation %s] marked as failed: %s",
+                            mutation_log.id,
+                            errors_json,
+                        )
                         for exc in exceptions:
-                            logger.error("[OpenIMISMutation %s] Exception:", mutation_log.id, exc_info=exc)
+                            logger.error(
+                                "[OpenIMISMutation %s] Exception:",
+                                mutation_log.id,
+                                exc_info=exc,
+                            )
                         mutation_log.mark_as_failed(errors_json)
                 except BaseException as exc:
                     error_messages = exc
-                    logger.error("async_mutate threw an exception. It should have gotten this far.", exc_info=exc)
+                    logger.error(
+                        "async_mutate threw an exception. It should have gotten this far.",
+                        exc_info=exc,
+                    )
                     # Record the failure of the mutation but don't include details for security reasons
-                    mutation_log.mark_as_failed(f"The mutation threw a {type(exc)}, check logs for details")
-                logger.debug("[OpenIMISMutation %s] send post mutation signal", mutation_log.id)
+                    mutation_log.mark_as_failed(
+                        f"The mutation threw a {type(exc)}, check logs for details"
+                    )
+                logger.debug(
+                    "[OpenIMISMutation %s] send post mutation signal", mutation_log.id
+                )
                 signal_mutation_module_after_mutating[cls._mutation_module].send(
-                    sender=cls, mutation_log_id=mutation_log.id, data=data, user=info.context.user,
-                    mutation_module=cls._mutation_module, mutation_class=cls.__name__,
-                    error_messages=error_messages
+                    sender=cls,
+                    mutation_log_id=mutation_log.id,
+                    data=data,
+                    user=info.context.user,
+                    mutation_module=cls._mutation_module,
+                    mutation_class=cls.__name__,
+                    error_messages=error_messages,
                 )
         except Exception as exc:
-            logger.error(f"Exception while processing mutation id {mutation_log.id}", exc_info=exc)
+            logger.error(
+                f"Exception while processing mutation id {mutation_log.id}",
+                exc_info=exc,
+            )
             mutation_log.mark_as_failed(exc)
 
         return cls(internal_id=mutation_log.id)
@@ -441,16 +548,16 @@ class OrderedDjangoFilterConnectionField(DjangoFilterConnectionField):
 
     @classmethod
     def connection_resolver(
-            cls,
-            resolver,
-            connection,
-            default_manager,
-            queryset_resolver,
-            max_limit,
-            enforce_first_or_last,
-            root,
-            info,
-            **args
+        cls,
+        resolver,
+        connection,
+        default_manager,
+        queryset_resolver,
+        max_limit,
+        enforce_first_or_last,
+        root,
+        info,
+        **args,
     ):
         first = args.get("first")
         last = args.get("last")
@@ -477,7 +584,10 @@ class OrderedDjangoFilterConnectionField(DjangoFilterConnectionField):
 
         if offset is not None:
             assert before is None, (
-                "You can't provide a `before` value at the same time as an `offset` value to properly paginate the `{}` connection."
+                """
+                You can't provide a `before` value at the same time as an `offset` value
+                 to properly paginate the `{}` connection.
+                """
             ).format(info.field_name)
 
         # eventually leads to DjangoObjectType's get_queryset (accepts queryset)
@@ -489,8 +599,11 @@ class OrderedDjangoFilterConnectionField(DjangoFilterConnectionField):
         # but iterable might be promise
         iterable = queryset_resolver(connection, iterable, info, args)
         on_resolve = partial(
-            cls.resolve_connection, connection, args,
-            max_limit=max_limit, user=info.context.user
+            cls.resolve_connection,
+            connection,
+            args,
+            max_limit=max_limit,
+            user=info.context.user,
         )
 
         if Promise.is_thenable(iterable):
@@ -500,11 +613,13 @@ class OrderedDjangoFilterConnectionField(DjangoFilterConnectionField):
 
     @classmethod
     def orderBy(cls, qs, args):
-        order = args.get('orderBy', None)
+        order = args.get("orderBy", None)
         if order:
-            random_expression = RawSQL("NEWID()", params=[]) \
-                if settings.MSSQL else \
-                RawSQL("RANDOM()", params=[])
+            random_expression = (
+                RawSQL("NEWID()", params=[])
+                if settings.MSSQL
+                else RawSQL("RANDOM()", params=[])
+            )
             if type(order) is str:
                 if order == "?":
                     snake_order = random_expression
@@ -513,7 +628,11 @@ class OrderedDjangoFilterConnectionField(DjangoFilterConnectionField):
                     snake_order = to_snake_case(cls._filter_order_by(order))
             else:
                 snake_order = [
-                    to_snake_case(cls._filter_order_by(o)) if o != "?" else random_expression
+                    (
+                        to_snake_case(cls._filter_order_by(o))
+                        if o != "?"
+                        else random_expression
+                    )
                     for o in order
                 ]
             qs = qs.order_by(*snake_order)
@@ -522,7 +641,7 @@ class OrderedDjangoFilterConnectionField(DjangoFilterConnectionField):
 
     @classmethod
     def resolve_queryset(
-            cls, connection, iterable, info, args, filtering_args, filterset_class
+        cls, connection, iterable, info, args, filtering_args, filterset_class
     ):
         request = getattr(info, "context", None)
 
@@ -532,7 +651,10 @@ class OrderedDjangoFilterConnectionField(DjangoFilterConnectionField):
         user_agent = request.headers.get("User-Agent", "")
         current_session_key = request.session.session_key
         if not is_this_session_superuser(current_session_key):
-            if not any(bypass in user_agent for bypass in getattr(settings, "USER_AGENT_CSRF_BYPASS", [])):
+            if not any(
+                bypass in user_agent
+                for bypass in getattr(settings, "USER_AGENT_CSRF_BYPASS", [])
+            ):
                 csrf_middleware = CsrfViewMiddleware(lambda req: None)
                 reason = csrf_middleware.process_view(request, None, (), {})
                 if reason:
@@ -575,8 +697,12 @@ class MutationLogGQLType(DjangoObjectType):
         }
         connection_class = ExtendedConnection
 
-    status = graphene.Field(graphene.Int,
-                            description=", ".join([f"{pair[0]}: {pair[1]}" for pair in MutationLog.STATUS_CHOICES]))
+    status = graphene.Field(
+        graphene.Int,
+        description=", ".join(
+            [f"{pair[0]}: {pair[1]}" for pair in MutationLog.STATUS_CHOICES]
+        ),
+    )
 
     @classmethod
     def get_queryset(cls, queryset, info):
@@ -594,18 +720,22 @@ UT_TECHNICAL = "TECHNICAL"
 UT_OFFICER = "OFFICER"
 UT_CLAIM_ADMIN = "CLAIM_ADMIN"
 
-UserTypeEnum = graphene.Enum("UserTypes", [
-    (UT_INTERACTIVE, UT_INTERACTIVE),
-    (UT_OFFICER, UT_OFFICER),
-    (UT_TECHNICAL, UT_TECHNICAL),
-    (UT_CLAIM_ADMIN, UT_CLAIM_ADMIN)
-])
+UserTypeEnum = graphene.Enum(
+    "UserTypes",
+    [
+        (UT_INTERACTIVE, UT_INTERACTIVE),
+        (UT_OFFICER, UT_OFFICER),
+        (UT_TECHNICAL, UT_TECHNICAL),
+        (UT_CLAIM_ADMIN, UT_CLAIM_ADMIN),
+    ],
+)
+
 
 class ClaimAdminGQLType(DjangoObjectType):
     """
     Details about a Claim Administrator
     """
-    
+
     class Meta:
         model = ClaimAdmin
         interfaces = (graphene.relay.Node,)
@@ -614,7 +744,9 @@ class ClaimAdminGQLType(DjangoObjectType):
             "code": ["exact", "icontains"],
             "last_name": ["exact", "icontains"],
             "other_names": ["exact", "icontains"],
-            **prefix_filterset("health_facility__", HealthFacilityGQLType._meta.filter_fields),
+            **prefix_filterset(
+                "health_facility__", HealthFacilityGQLType._meta.filter_fields
+            ),
         }
         connection_class = ExtendedConnection
 
@@ -626,15 +758,15 @@ class ClaimAdminGQLType(DjangoObjectType):
 
 class Query(graphene.ObjectType):
     module_configurations = graphene.List(
-        ModuleConfigurationGQLType,
-        validity=graphene.String(),
-        layer=graphene.String())
+        ModuleConfigurationGQLType, validity=graphene.String(), layer=graphene.String()
+    )
 
     user_obligatory_fields = GenericScalar()
     eo_obligatory_fields = GenericScalar()
 
     mutation_logs = OrderedDjangoFilterConnectionField(
-        MutationLogGQLType, orderBy=graphene.List(of_type=graphene.String))
+        MutationLogGQLType, orderBy=graphene.List(of_type=graphene.String)
+    )
 
     role = OrderedDjangoFilterConnectionField(
         RoleGQLType,
@@ -644,15 +776,20 @@ class Query(graphene.ObjectType):
         system_role_id=graphene.Int(),
         show_history=graphene.Boolean(),
         client_mutation_id=graphene.String(),
-        str=graphene.String(description="Text search on any field")
+        str=graphene.String(description="Text search on any field"),
     )
 
     role_right = OrderedDjangoFilterConnectionField(
-        RoleRightGQLType, orderBy=graphene.List(of_type=graphene.String), validity=graphene.Date(), max_limit=None
+        RoleRightGQLType,
+        orderBy=graphene.List(of_type=graphene.String),
+        validity=graphene.Date(),
+        max_limit=None,
     )
 
     interactiveUsers = OrderedDjangoFilterConnectionField(
-        InteractiveUserGQLType, orderBy=graphene.List(of_type=graphene.String), validity=graphene.Date(),
+        InteractiveUserGQLType,
+        orderBy=graphene.List(of_type=graphene.String),
+        validity=graphene.Date(),
         show_history=graphene.Boolean(),
         client_mutation_id=graphene.String(),
     )
@@ -668,7 +805,9 @@ class Query(graphene.ObjectType):
         email=graphene.String(description="exact match on email address"),
         role_id=graphene.Int(),
         roles=graphene.List(of_type=graphene.Int),
-        health_facility_id=graphene.Int(description="Base health facility ID (not UUID!)"),
+        health_facility_id=graphene.Int(
+            description="Base health facility ID (not UUID!)"
+        ),
         region_id=graphene.Int(),
         region_ids=graphene.List(of_type=graphene.Int),
         district_id=graphene.Int(),
@@ -680,22 +819,24 @@ class Query(graphene.ObjectType):
         language=graphene.String(),
         showHistory=graphene.Boolean(),
         showDeleted=graphene.Boolean(),
-        str=graphene.String(description="text search that will check username, last name, other names and email"),
+        str=graphene.String(
+            description="text search that will check username, last name, other names and email"
+        ),
         description="This interface provides access to the various types of users in openIMIS. The main resource"
-                    "is limited to a username and refers either to a TechnicalUser or InteractiveUser. Only the latter"
-                    "is exposed in GraphQL. There are also optional links to ClaimAdministrator and Officer depending"
-                    "on the setup. BEWARE, fetching these links is costly as there is no direct database link between"
-                    "these entities and there are retrieved one by one. Do not fetch them for large lists if you can"
-                    "avoid it. The showHistory is acting on the InteractiveUser, avoid mixing with Officer or "
-                    "ClaimAdmin.",
+        "is limited to a username and refers either to a TechnicalUser or InteractiveUser. Only the latter"
+        "is exposed in GraphQL. There are also optional links to ClaimAdministrator and Officer depending"
+        "on the setup. BEWARE, fetching these links is costly as there is no direct database link between"
+        "these entities and there are retrieved one by one. Do not fetch them for large lists if you can"
+        "avoid it. The showHistory is acting on the InteractiveUser, avoid mixing with Officer or "
+        "ClaimAdmin.",
         parent_location=graphene.String(),
-        parent_location_level=graphene.Int()
+        parent_location_level=graphene.Int(),
     )
     claim_admins = DjangoFilterConnectionField(
         ClaimAdminGQLType,
         search=graphene.String(),
         region_uuid=graphene.String(),
-        district_uuid=graphene.String()
+        district_uuid=graphene.String(),
     )
     user = graphene.Field(UserGQLType)
 
@@ -710,13 +851,15 @@ class Query(graphene.ObjectType):
         OfficerGQLType,
         villages_uuids=graphene.List(
             graphene.NonNull(graphene.String),
-            description="List of villages to be required for substituion officers"),
+            description="List of villages to be required for substituion officers",
+        ),
         officer_uuid=graphene.String(
             required=False,
-            description="Current officer uuid to be excluded from substitution list."),
+            description="Current officer uuid to be excluded from substitution list.",
+        ),
         str=graphene.String(
             required=False,
-            description="Query that will return possible EO replacements."
+            description="Query that will return possible EO replacements.",
         ),
     )
 
@@ -737,67 +880,66 @@ class Query(graphene.ObjectType):
     validate_username = graphene.Field(
         graphene.Boolean,
         username=graphene.String(required=True),
-        description="Checks that the specified username is unique."
+        description="Checks that the specified username is unique.",
     )
 
     validate_user_email = graphene.Field(
         graphene.Boolean,
         user_email=graphene.String(required=True),
-        description="Checks that the specified user email is unique."
+        description="Checks that the specified user email is unique.",
     )
 
     validate_role_name = graphene.Field(
         graphene.Boolean,
         role_name=graphene.String(required=True),
-        description="Checks that the specified role name is unique."
+        description="Checks that the specified role name is unique.",
     )
 
     username_length = graphene.Int()
 
     password_policy = graphene.Field(
-        graphene.JSONString,
-        description="Returns the password policy configuration."
+        graphene.JSONString, description="Returns the password policy configuration."
     )
-    def resolve_claim_admins(
-            self,
-            info,
-            search=None,
-            **kwargs
-    ):
+
+    def resolve_claim_admins(self, info, search=None, **kwargs):
         user_health_facility = None
-        if not info.context.user.has_perms(
-                CoreConfig.gql_query_claim_admins_perms
-        ):
+        if not info.context.user.has_perms(CoreConfig.gql_query_claim_admins_perms):
             raise PermissionDenied(_("unauthorized"))
 
         hf_filters = [*filter_validity(**kwargs)]
-        district_uuid = kwargs.get('district_uuid', None)
-        region_uuid = kwargs.get('region_uuid', None)
+        district_uuid = kwargs.get("district_uuid", None)
+        region_uuid = kwargs.get("region_uuid", None)
         try:
-            apps.get_model('location', 'HealthFacility')
+            HealthFacility = apps.get_model("location", "HealthFacility")
             if district_uuid is not None:
                 hf_filters += [Q(location__uuid=district_uuid)]
             elif region_uuid is not None:
                 hf_filters += [Q(location__parent__uuid=region_uuid)]
-            
+
             if settings.ROW_SECURITY:
                 from locations.models import LocationManager
-                q = LocationManager().build_user_location_filter_query( info.context.user._u, prefix='location', loc_types=['D'])
+
+                q = LocationManager().build_user_location_filter_query(
+                    info.context.user._u, prefix="location", loc_types=["D"]
+                )
                 if q:
                     hf_filters += [q]
-                
+
             user_health_facility = HealthFacility.objects.filter(*hf_filters)
-        except:
+        except Exception as e:
+            logger.debug(e)
             pass
-        
+
         filters = [*filter_validity(**kwargs)]
         if user_health_facility:
             filters += [Q(health_facility__in=user_health_facility)]
 
         if search:
-            filters += [Q(code__icontains=search) |
-                        Q(last_name__icontains=search) |
-                        Q(other_names__icontains=search)]
+            filters += [
+                Q(code__icontains=search)
+                | Q(last_name__icontains=search)
+                | Q(other_names__icontains=search)
+            ]
 
         return ClaimAdmin.objects.filter(*filters)
 
@@ -818,13 +960,15 @@ class Query(graphene.ObjectType):
     def resolve_validate_role_name(self, info, **kwargs):
         if not info.context.user.has_perms(CoreConfig.gql_query_roles_perms):
             raise PermissionDenied(_("unauthorized"))
-        errors = check_role_unique_name(name=kwargs['role_name'])
+        errors = check_role_unique_name(name=kwargs["role_name"])
         return False if errors else True
 
     def resolve_validate_username(self, info, **kwargs):
         if not info.context.user.has_perms(CoreConfig.gql_query_users_perms):
             raise PermissionDenied(_("unauthorized"))
-        if User.objects.filter(username=kwargs['username'], validity_to__isnull=True).exists():
+        if User.objects.filter(
+            username=kwargs["username"], validity_to__isnull=True
+        ).exists():
             return False
         else:
             return True
@@ -832,14 +976,14 @@ class Query(graphene.ObjectType):
     def resolve_validate_user_email(self, info, **kwargs):
         if not info.context.user.has_perms(CoreConfig.gql_query_users_perms):
             raise PermissionDenied(_("unauthorized"))
-        errors = check_user_unique_email(user_email=kwargs['user_email'])
+        errors = check_user_unique_email(user_email=kwargs["user_email"])
         return False if errors else True
 
     def resolve_enrolment_officers(self, info, **kwargs):
         from .models import Officer
 
         if not info.context.user.has_perms(
-                CoreConfig.gql_query_enrolment_officers_perms
+            CoreConfig.gql_query_enrolment_officers_perms
         ):
             raise PermissionError("Unauthorized")
 
@@ -859,33 +1003,40 @@ class Query(graphene.ObjectType):
         from .models import Officer
 
         if not info.context.user.has_perms(
-                CoreConfig.gql_query_enrolment_officers_perms):
+            CoreConfig.gql_query_enrolment_officers_perms
+        ):
             raise PermissionError("Unauthorized")
 
         queryset = Officer.objects
 
-        villages_uuids = kwargs.get('villages_uuids', None)
+        villages_uuids = kwargs.get("villages_uuids", None)
         if not villages_uuids:
             return []
 
-        officer_uuid = kwargs.get('officer_uuid', None)
+        officer_uuid = kwargs.get("officer_uuid", None)
         if officer_uuid:
             queryset = queryset.exclude(uuid=officer_uuid)
 
-        query_str = kwargs.get('str', None)
+        query_str = kwargs.get("str", None)
         if query_str:
-            queryset = queryset.filter(Q(code__istartswith=query_str)
-                                       | Q(last_name__istartswith=query_str)
-                                       | Q(other_names__istartswith=query_str)
-                                       | Q(email__istartswith=query_str))
+            queryset = queryset.filter(
+                Q(code__istartswith=query_str)
+                | Q(last_name__istartswith=query_str)
+                | Q(other_names__istartswith=query_str)
+                | Q(email__istartswith=query_str)
+            )
 
-        return queryset.prefetch_related('officer_villages') \
-            .annotate(nb_village=Count('officer_villages')) \
-            .filter(nb_village__gte=len(villages_uuids),
-                    officer_villages__location__uuid__in=villages_uuids,
-                    validity_to__isnull=True,
-                    officer_villages__validity_to__isnull=True,
-                    officer_villages__location__validity_to__isnull=True)
+        return (
+            queryset.prefetch_related("officer_villages")
+            .annotate(nb_village=Count("officer_villages"))
+            .filter(
+                nb_village__gte=len(villages_uuids),
+                officer_villages__location__uuid__in=villages_uuids,
+                validity_to__isnull=True,
+                officer_villages__validity_to__isnull=True,
+                officer_villages__location__validity_to__isnull=True,
+            )
+        )
 
     def resolve_interactive_users(self, info, **kwargs):
         if not info.context.user.has_perms(CoreConfig.gql_query_users_perms):
@@ -896,10 +1047,12 @@ class Query(graphene.ObjectType):
         client_mutation_id = kwargs.get("client_mutation_id", None)
         if client_mutation_id:
             wait_for_mutation(client_mutation_id)
-            filters.append(Q(mutations__mutation__client_mutation_id=client_mutation_id))
+            filters.append(
+                Q(mutations__mutation__client_mutation_id=client_mutation_id)
+            )
 
-        show_history = kwargs.get('show_history', False)
-        if not show_history and not kwargs.get('uuid', None):
+        show_history = kwargs.get("show_history", False)
+        if not show_history and not kwargs.get("uuid", None):
             filters += filter_validity(**kwargs)
 
         return gql_optimizer.query(query.filter(*filters), info)
@@ -919,98 +1072,147 @@ class Query(graphene.ObjectType):
             return CoreConfig.fields_controls_eo
         return None
 
-    def resolve_users(self, info, email=None, last_name=None, other_names=None, phone=None,
-                      role_id=None, roles=None, health_facility_id=None, region_id=None,
-                      district_id=None, municipality_id=None, birth_date_from=None, birth_date_to=None,
-                      user_types=None, language=None, village_id=None, region_ids=None, parent_location=None,
-                      parent_location_level=None, **kwargs):
+    def resolve_users(
+        self,
+        info,
+        email=None,
+        last_name=None,
+        other_names=None,
+        phone=None,
+        role_id=None,
+        roles=None,
+        health_facility_id=None,
+        region_id=None,
+        district_id=None,
+        municipality_id=None,
+        birth_date_from=None,
+        birth_date_to=None,
+        user_types=None,
+        language=None,
+        village_id=None,
+        region_ids=None,
+        parent_location=None,
+        parent_location_level=None,
+        **kwargs,
+    ):
         if not info.context.user.has_perms(CoreConfig.gql_query_users_perms):
             raise PermissionError("Unauthorized")
 
         user_filters = []
         user_query = User.objects.exclude(t_user__isnull=False)
 
-        show_deleted = kwargs.get('showDeleted', False)
-        if not show_deleted and not kwargs.get('id', None):
+        show_deleted = kwargs.get("showDeleted", False)
+        if not show_deleted and not kwargs.get("id", None):
             # active_users_ids = [user.id for user in user_query if user.is_active]
-            user_filters.append(Q(i_user__isnull=True) | Q(*filter_validity(prefix='i_user__')))
+            user_filters.append(
+                Q(i_user__isnull=True) | Q(*filter_validity(prefix="i_user__"))
+            )
 
         text_search = kwargs.get("str")  # Poorly chosen name, avoid of shadowing "str"
         if text_search:
-            user_filters.append(Q(username__icontains=text_search) |
-                                Q(i_user__last_name__icontains=text_search) |
-                                Q(officer__last_name__icontains=text_search) |
-                                Q(claim_admin__last_name__icontains=text_search) |
-                                Q(i_user__other_names__icontains=text_search) |
-                                Q(officer__other_names__icontains=text_search) |
-                                Q(claim_admin__other_names__icontains=text_search) |
-                                Q(i_user__email=text_search) |
-                                Q(officer__email=text_search) |
-                                Q(claim_admin__email_id=text_search)
-                                )
+            user_filters.append(
+                Q(username__icontains=text_search)
+                | Q(i_user__last_name__icontains=text_search)
+                | Q(officer__last_name__icontains=text_search)
+                | Q(claim_admin__last_name__icontains=text_search)
+                | Q(i_user__other_names__icontains=text_search)
+                | Q(officer__other_names__icontains=text_search)
+                | Q(claim_admin__other_names__icontains=text_search)
+                | Q(i_user__email=text_search)
+                | Q(officer__email=text_search)
+                | Q(claim_admin__email_id=text_search)
+            )
 
         client_mutation_id = kwargs.get("client_mutation_id", None)
         if client_mutation_id:
             wait_for_mutation(client_mutation_id)
-            user_filters.append(Q(mutations__mutation__client_mutation_id=client_mutation_id))
+            user_filters.append(
+                Q(mutations__mutation__client_mutation_id=client_mutation_id)
+            )
 
         if email:
-            user_filters.append(Q(i_user__email=email) |
-                                Q(officer__email=email) |
-                                Q(claim_admin__email_id=email))
+            user_filters.append(
+                Q(i_user__email=email)
+                | Q(officer__email=email)
+                | Q(claim_admin__email_id=email)
+            )
         if phone:
-            user_filters.append(Q(i_user__phone=phone) |
-                                Q(officer__phone=phone) |
-                                Q(claim_admin__phone=phone))
+            user_filters.append(
+                Q(i_user__phone=phone)
+                | Q(officer__phone=phone)
+                | Q(claim_admin__phone=phone)
+            )
         if last_name:
-            user_filters.append(Q(i_user__last_name__icontains=last_name) |
-                                Q(officer__last_name__icontains=last_name) |
-                                Q(claim_admin__last_name__icontains=last_name))
+            user_filters.append(
+                Q(i_user__last_name__icontains=last_name)
+                | Q(officer__last_name__icontains=last_name)
+                | Q(claim_admin__last_name__icontains=last_name)
+            )
         if other_names:
-            user_filters.append(Q(i_user__other_names__icontains=other_names) |
-                                Q(officer__other_names__icontains=other_names) |
-                                Q(claim_admin__other_names__icontains=other_names))
+            user_filters.append(
+                Q(i_user__other_names__icontains=other_names)
+                | Q(officer__other_names__icontains=other_names)
+                | Q(claim_admin__other_names__icontains=other_names)
+            )
         if language:
             user_filters.append(Q(i_user__language=language))
             # Language is not applicable to Office/ClaimAdmin
         if health_facility_id:
-            user_filters.append(Q(i_user__health_facility_id=health_facility_id) |
-                                Q(officer__location_id=health_facility_id) |
-                                Q(claim_admin__health_facility_id=health_facility_id))
+            user_filters.append(
+                Q(i_user__health_facility_id=health_facility_id)
+                | Q(officer__location_id=health_facility_id)
+                | Q(claim_admin__health_facility_id=health_facility_id)
+            )
         if birth_date_from:
-            user_filters.append(Q(officer__dob__gte=birth_date_from) |
-                                Q(officer__veo_dob__gte=birth_date_from) |
-                                Q(claim_admin__dob__gte=birth_date_from))
+            user_filters.append(
+                Q(officer__dob__gte=birth_date_from)
+                | Q(officer__veo_dob__gte=birth_date_from)
+                | Q(claim_admin__dob__gte=birth_date_from)
+            )
         if birth_date_to:
-            user_filters.append(Q(officer__dob__lte=birth_date_to) |
-                                Q(officer__veo_dob__lte=birth_date_to) |
-                                Q(claim_admin__dob__lte=birth_date_to))
+            user_filters.append(
+                Q(officer__dob__lte=birth_date_to)
+                | Q(officer__veo_dob__lte=birth_date_to)
+                | Q(claim_admin__dob__lte=birth_date_to)
+            )
         if role_id:
-            user_filters.append(Q(i_user__user_roles__role_id=role_id) &
-                                Q(i_user__user_roles__validity_to__isnull=True))
+            user_filters.append(
+                Q(i_user__user_roles__role_id=role_id)
+                & Q(i_user__user_roles__validity_to__isnull=True)
+            )
         if roles:
-            user_filters.append(Q(i_user__user_roles__role_id__in=roles) &
-                                Q(i_user__user_roles__validity_to__isnull=True))
+            user_filters.append(
+                Q(i_user__user_roles__role_id__in=roles)
+                & Q(i_user__user_roles__validity_to__isnull=True)
+            )
         if parent_location and parent_location_level is not None:
             location_filters = {
                 0: Q(i_user__userdistrict__location__parent__uuid=parent_location),
                 1: Q(i_user__userdistrict__location__uuid=parent_location),
                 2: Q(officer__officer_villages__location__parent__uuid=parent_location),
-                3: Q(officer__officer_villages__location__uuid=parent_location)
+                3: Q(officer__officer_villages__location__uuid=parent_location),
             }
             user_filters.append(location_filters.get(parent_location_level, None))
         else:
             if region_id:
-                user_filters.append(Q(i_user__userdistrict__location__parent_id=region_id))
+                user_filters.append(
+                    Q(i_user__userdistrict__location__parent_id=region_id)
+                )
             elif region_ids:
-                user_filters.append(Q(i_user__userdistrict__location__parent_id__in=region_ids))
+                user_filters.append(
+                    Q(i_user__userdistrict__location__parent_id__in=region_ids)
+                )
 
             if district_id:
                 user_filters.append(Q(i_user__userdistrict__location_id=district_id))
             if municipality_id:
-                user_filters.append(Q(officer__officer_villages__location__parent_id=municipality_id))
+                user_filters.append(
+                    Q(officer__officer_villages__location__parent_id=municipality_id)
+                )
             if village_id:
-                user_filters.append(Q(officer__officer_villages__location_id=village_id))
+                user_filters.append(
+                    Q(officer__officer_villages__location_id=village_id)
+                )
 
         if user_types:
             ut_conditions = {
@@ -1019,7 +1221,9 @@ class Query(graphene.ObjectType):
                 UT_TECHNICAL: Q(t_user__isnull=False),
                 UT_CLAIM_ADMIN: Q(claim_admin__isnull=False),
             }
-            user_filters.append(reduce(lambda a, b: a | b, [ut_conditions[x] for x in user_types]))
+            user_filters.append(
+                reduce(lambda a, b: a | b, [ut_conditions[x] for x in user_types])
+            )
 
         # Do NOT use the query optimizer here ! It would make the t_user, officer etc as deferred fields if they are not
         # explicitly requested in the GraphQL response. However, this prevents the dynamic remapping of the User object.
@@ -1033,35 +1237,37 @@ class Query(graphene.ObjectType):
 
         role_right = kwargs.get("role_right", None)
         if role_right:
-            filters.append(Q(rights__validity_to__isnull=True, rights__right_id=role_right))
+            filters.append(
+                Q(rights__validity_to__isnull=True, rights__right_id=role_right)
+            )
 
         text_search = kwargs.get("str")
         if text_search:
-            filters.append(Q(name__icontains=text_search) | Q(alt_language__icontains=text_search))
+            filters.append(
+                Q(name__icontains=text_search) | Q(alt_language__icontains=text_search)
+            )
 
         client_mutation_id = kwargs.get("client_mutation_id", None)
-        
+
         if client_mutation_id:
             wait_for_mutation(client_mutation_id)
-            filters.append(Q(mutations__mutation__client_mutation_id=client_mutation_id))
+            filters.append(
+                Q(mutations__mutation__client_mutation_id=client_mutation_id)
+            )
 
-        show_history = kwargs.get('show_history', False)
-        if not show_history and not kwargs.get('uuid', None):
+        show_history = kwargs.get("show_history", False)
+        if not show_history and not kwargs.get("uuid", None):
             filters += filter_validity(**kwargs)
 
-        is_system_role = kwargs.get('is_system', None)
+        is_system_role = kwargs.get("is_system", None)
         # check if we can use default filter validity
         if is_system_role is not None:
             if is_system_role:
-                query = query.filter(
-                    is_system__gte=1
-                )
+                query = query.filter(is_system__gte=1)
             else:
-                query = query.filter(
-                    is_system=0
-                )
+                query = query.filter(is_system=0)
 
-        if system_role_id := kwargs.get('system_role_id', None):
+        if system_role_id := kwargs.get("system_role_id", None):
             query = query.filter(is_system=system_role_id)
 
         return gql_optimizer.query(query.filter(*filters), info)
@@ -1070,11 +1276,13 @@ class Query(graphene.ObjectType):
         if not info.context.user.has_perms(CoreConfig.gql_query_roles_perms):
             raise PermissionError("Unauthorized")
         filters = []
-        if 'validity' in kwargs:
+        if "validity" in kwargs:
             filters += filter_validity(**kwargs)
             return gql_optimizer.query(RoleRight.objects.filter(*filters), info)
         else:
-            return gql_optimizer.query(RoleRight.objects.filter(validity_to__isnull=True), info)
+            return gql_optimizer.query(
+                RoleRight.objects.filter(validity_to__isnull=True), info
+            )
 
     def resolve_modules_permissions(self, info, **kwargs):
         """
@@ -1082,7 +1290,7 @@ class Query(graphene.ObjectType):
         Requires 'gql_query_roles_perms' permission.
         """
         from core.apps import CoreConfig  # Import here to avoid circular imports
-        
+
         if not info.context.user.has_perms(CoreConfig.gql_query_roles_perms):
             raise PermissionError("Unauthorized")
 
@@ -1091,16 +1299,19 @@ class Query(graphene.ObjectType):
         for app, app_perms in permissions_dict.items():
             permissions = []
             for perm_name, perm_ids in app_perms.items():
-                permissions.extend([
-                    PermissionOpenImisGQLType(perms_name=perm_name, perms_value=perm_id)
-                    for perm_id in perm_ids
-                ])
+                permissions.extend(
+                    [
+                        PermissionOpenImisGQLType(
+                            perms_name=perm_name, perms_value=perm_id
+                        )
+                        for perm_id in perm_ids
+                    ]
+                )
             if permissions:  # Only add modules with permissions
-                config.append(ModulePermissionGQLType(
-                    module_name=app,
-                    permissions=permissions
-                ))
-        
+                config.append(
+                    ModulePermissionGQLType(module_name=app, permissions=permissions)
+                )
+
         return ModulePermissionsListGQLType(permissions=config)
 
     def resolve_custom_filters(self, info, **kwargs):
@@ -1108,17 +1319,20 @@ class Query(graphene.ObjectType):
         if type(user) is AnonymousUser or not user.id:
             raise PermissionError("Unauthorized")
 
-        module_name, object_type_name, uuid_of_object, additional_params = Query._obtain_params_from_custom_filter_graphql_query(
-            **kwargs)
+        module_name, object_type_name, uuid_of_object, additional_params = (
+            Query._obtain_params_from_custom_filter_graphql_query(**kwargs)
+        )
         custom_filter_list_output = Query._obtain_definition_of_custom_filter_from_hub(
             module_name, object_type_name, uuid_of_object, additional_params
         )
-        possible_filters = Query._build_possible_custom_filter_options(custom_filter_list_output)
+        possible_filters = Query._build_possible_custom_filter_options(
+            custom_filter_list_output
+        )
         return CustomFilterGQLType(
             type=object_type_name,
             code=module_name,
             object_class_name=object_type_name,
-            possible_filters=possible_filters
+            possible_filters=possible_filters,
         )
 
     @staticmethod
@@ -1131,17 +1345,15 @@ class Query(graphene.ObjectType):
 
     @staticmethod
     def _obtain_definition_of_custom_filter_from_hub(
-            module_name, object_type_name, uuid_of_object, additional_params
+        module_name, object_type_name, uuid_of_object, additional_params
     ):
         kwargs = {}
         if uuid_of_object is not None:
-            kwargs['uuid'] = uuid_of_object
+            kwargs["uuid"] = uuid_of_object
         if additional_params is not None:
-            kwargs['additional_params'] = additional_params
+            kwargs["additional_params"] = additional_params
         return CustomFilterWizardStorage.build_custom_filters_definition(
-            module_name=module_name,
-            object_type=object_type_name,
-            **kwargs
+            module_name=module_name, object_type=object_type_name, **kwargs
         )
 
     @staticmethod
@@ -1152,37 +1364,37 @@ class Query(graphene.ObjectType):
                 CustomFilterOptionGQLType(
                     field=custom_filter.field,
                     filter=custom_filter.filter,
-                    type=custom_filter.type
+                    type=custom_filter.type,
                 )
             )
         return possible_filters
 
     def resolve_module_configurations(self, info, **kwargs):
-        validity = kwargs.get('validity')
+        validity = kwargs.get("validity")
         # configuration is loaded before even the core module
         # the datetime is ALWAYS a Gregorian one
         # (whatever datetime is used in business modules)
         if validity is None:
             validity = py_datetime.now()
         else:
-            d = re.split(r'\d', validity)
-            validity = py_datetime(*[int('0' + x) for x in d][:6])
+            d = re.split(r"\d", validity)
+            validity = py_datetime(*[int("0" + x) for x in d][:6])
         # is_exposed indicates wherever a configuration
         # is safe to be accessible from api
         # DON'T EXPOSE (backend) configurations that contain credentials,...
         crits = (
             Q(is_disabled_until=None) | Q(is_disabled_until__lt=validity),
-            Q(is_exposed=True)
+            Q(is_exposed=True),
         )
-        layer = kwargs.get('layer')
+        layer = kwargs.get("layer")
         if layer is not None:
             crits = (*crits, Q(layer=layer))
-        return ModuleConfiguration.objects.prefetch_related('controls').filter(*crits)
+        return ModuleConfiguration.objects.prefetch_related("controls").filter(*crits)
 
     def resolve_languages(self, info, **kwargs):
         if not info.context.user.is_authenticated:
             raise PermissionDenied(_("unauthorized"))
-        return Language.objects.order_by('sort_order').all()
+        return Language.objects.order_by("sort_order").all()
 
 
 class RoleBase:
@@ -1203,11 +1415,11 @@ def update_or_create_role(data, user):
     # client_mutation_label = data.get("client_mutation_label", None)
 
     if "client_mutation_id" in data:
-        data.pop('client_mutation_id')
+        data.pop("client_mutation_id")
     if "client_mutation_label" in data:
-        data.pop('client_mutation_label')
-    role_uuid = data.pop('uuid') if 'uuid' in data else None
-    rights_id = data.pop('rights_id') if "rights_id" in data else None
+        data.pop("client_mutation_label")
+    role_uuid = data.pop("uuid") if "uuid" in data else None
+    rights_id = data.pop("rights_id") if "rights_id" in data else None
     if role_uuid:
         role = Role.objects.get(uuid=role_uuid)
         role.save_history()
@@ -1216,10 +1428,13 @@ def update_or_create_role(data, user):
         if rights_id is not None:
             # reset all role rights assigned to the chosen role
             import datetime
+
             now = datetime.datetime.now()
             role_rights_currently_assigned = RoleRight.objects.filter(role_id=role.id)
             role_rights_currently_assigned.update(validity_to=now)
-            role_rights_currently_assigned = role_rights_currently_assigned.values_list('right_id', flat=True)
+            role_rights_currently_assigned = role_rights_currently_assigned.values_list(
+                "right_id", flat=True
+            )
             for right_id in rights_id:
                 if right_id not in role_rights_currently_assigned:
                     # create role right because it is a new role right
@@ -1231,24 +1446,31 @@ def update_or_create_role(data, user):
                     )
                 else:
                     # set date valid to - None
-                    role_right = RoleRight.objects.get(Q(role_id=role.id, right_id=right_id))
+                    role_right = RoleRight.objects.get(
+                        Q(role_id=role.id, right_id=right_id)
+                    )
                     role_right.validity_to = None
                     role_right.save()
     else:
         role = Role.objects.create(**data)
         # create role rights for that role if they were passed to mutation
         if rights_id:
-            [RoleRight.objects.create(
-                **{
-                    "role_id": role.id,
-                    "right_id": right_id,
-                    "audit_user_id": role.audit_user_id,
-                    "validity_from": data['validity_from'],
-                }
-            ) for right_id in rights_id]
+            [
+                RoleRight.objects.create(
+                    **{
+                        "role_id": role.id,
+                        "right_id": right_id,
+                        "audit_user_id": role.audit_user_id,
+                        "validity_from": data["validity_from"],
+                    }
+                )
+                for right_id in rights_id
+            ]
         if client_mutation_id:
             wait_for_mutation(client_mutation_id)
-            RoleMutation.object_mutated(user, role=role, client_mutation_id=client_mutation_id)
+            RoleMutation.object_mutated(
+                user, role=role, client_mutation_id=client_mutation_id
+            )
         return role
     return role
 
@@ -1258,15 +1480,16 @@ def duplicate_role(data, user):
     # client_mutation_label = data.get("client_mutation_label", None)
 
     if "client_mutation_id" in data:
-        data.pop('client_mutation_id')
+        data.pop("client_mutation_id")
     if "client_mutation_label" in data:
-        data.pop('client_mutation_label')
-    role_uuid = data.pop('uuid') if 'uuid' in data else None
-    rights_id = data.pop('rights_id') if "rights_id" in data else None
+        data.pop("client_mutation_label")
+    role_uuid = data.pop("uuid") if "uuid" in data else None
+    rights_id = data.pop("rights_id") if "rights_id" in data else None
     # get the current Role object to be duplicated
     role = Role.objects.get(uuid=role_uuid)
     # copy Role to be dupliacated
     import datetime
+
     now = datetime.datetime.now()
     duplicated_role = copy(role)
     duplicated_role.id = None
@@ -1277,7 +1500,9 @@ def duplicate_role(data, user):
     if rights_id:
         # reset all role rights assigned to the chosen role
         role_rights_currently_assigned = RoleRight.objects.filter(role_id=role.id)
-        role_rights_currently_assigned = role_rights_currently_assigned.values_list('right_id', flat=True)
+        role_rights_currently_assigned = role_rights_currently_assigned.values_list(
+            "right_id", flat=True
+        )
         for right_id in rights_id:
             validity_from = now
             if right_id in role_rights_currently_assigned:
@@ -1294,18 +1519,23 @@ def duplicate_role(data, user):
             )
     else:
         role_rights_currently_assigned = RoleRight.objects.filter(role_id=role.id)
-        [RoleRight.objects.create(
-            **{
-                "role_id": duplicated_role.id,
-                "right_id": role_right.right_id,
-                "audit_user_id": duplicated_role.audit_user_id,
-                "validity_from": now,
-            }
-        ) for role_right in role_rights_currently_assigned]
+        [
+            RoleRight.objects.create(
+                **{
+                    "role_id": duplicated_role.id,
+                    "right_id": role_right.right_id,
+                    "audit_user_id": duplicated_role.audit_user_id,
+                    "validity_from": now,
+                }
+            )
+            for role_right in role_rights_currently_assigned
+        ]
 
     if client_mutation_id:
         wait_for_mutation(client_mutation_id)
-        RoleMutation.object_mutated(user, role=duplicated_role, client_mutation_id=client_mutation_id)
+        RoleMutation.object_mutated(
+            user, role=duplicated_role, client_mutation_id=client_mutation_id
+        )
 
     return duplicated_role
 
@@ -1314,6 +1544,7 @@ class CreateRoleMutation(OpenIMISMutation):
     """
     Create a new role, with its chosen role right
     """
+
     _mutation_module = "core"
     _mutation_class = "CreateRoleMutation"
 
@@ -1324,28 +1555,28 @@ class CreateRoleMutation(OpenIMISMutation):
     def async_mutate(cls, user, **data):
         try:
             if type(user) is AnonymousUser or not user.id:
-                raise PermissionDenied(_('mutation.authentication_required'))
+                raise PermissionDenied(_("mutation.authentication_required"))
             if not user.has_perms(CoreConfig.gql_mutation_create_roles_perms):
                 raise PermissionDenied(_("unauthorized"))
-            if check_role_unique_name(data.get('name', None)):
+            if check_role_unique_name(data.get("name", None)):
                 raise ValidationError(_("mutation.duplicate_of_role_name"))
             from core.utils import TimeUtils
-            data['validity_from'] = TimeUtils.now()
-            data['audit_user_id'] = user.id_for_audit
+
+            data["validity_from"] = TimeUtils.now()
+            data["audit_user_id"] = user.id_for_audit
             update_or_create_role(data, user)
             return None
         except Exception as exc:
             return [
-                {
-                    'message': "core.mutation.failed_to_create_role",
-                    'detail': str(exc)
-                }]
+                {"message": "core.mutation.failed_to_create_role", "detail": str(exc)}
+            ]
 
 
 class UpdateRoleMutation(OpenIMISMutation):
     """
     Update a chosen role, with its chosen role right
     """
+
     _mutation_module = "core"
     _mutation_class = "UpdateRoleMutation"
 
@@ -1356,22 +1587,20 @@ class UpdateRoleMutation(OpenIMISMutation):
     def async_mutate(cls, user, **data):
         try:
             if type(user) is AnonymousUser or not user.id:
-                raise PermissionDenied(_('mutation.authentication_required'))
+                raise PermissionDenied(_("mutation.authentication_required"))
             if not user.has_perms(CoreConfig.gql_mutation_update_roles_perms):
                 raise PermissionDenied("unauthorized")
-            if 'uuid' not in data:
+            if "uuid" not in data:
                 raise ValidationError("There is no uuid in updateMutation input!")
-            if check_role_unique_name(data.get('name', None), data['uuid']):
+            if check_role_unique_name(data.get("name", None), data["uuid"]):
                 raise ValidationError("mutation.duplicate_of_role_name")
-            data['audit_user_id'] = user.id_for_audit
+            data["audit_user_id"] = user.id_for_audit
             update_or_create_role(data, user)
             return None
         except Exception as exc:
             return [
-                {
-                    'message': "core.mutation.failed_to_update_role",
-                    'detail': str(exc)
-                }]
+                {"message": "core.mutation.failed_to_update_role", "detail": str(exc)}
+            ]
 
 
 def set_role_deleted(role):
@@ -1379,18 +1608,24 @@ def set_role_deleted(role):
         role.delete_history()
         return []
     except Exception as exc:
+        logger.debug(exc)
         return {
-            'title': role.uuid,
-            'list': [{
-                'message': "role.mutation.failed_to_change_status_of_role" % {'role': str(role)},
-                'detail': role.uuid}]
+            "title": role.uuid,
+            "list": [
+                {
+                    "message": "role.mutation.failed_to_change_status_of_role"  # noqa: F504
+                    % {"role": str(role)},
+                    "detail": role.uuid,
+                }
+            ],
         }
 
 
 class DeleteRoleMutation(OpenIMISMutation):
     """
-        Delete a chosen role
+    Delete a chosen role
     """
+
     _mutation_module = "core"
     _mutation_class = "DeleteRoleMutation"
 
@@ -1403,26 +1638,31 @@ class DeleteRoleMutation(OpenIMISMutation):
             raise PermissionDenied("unauthorized")
         errors = []
         for role_uuid in data["uuids"]:
-            role = Role.objects \
-                .filter(uuid=role_uuid) \
-                .first()
+            role = Role.objects.filter(uuid=role_uuid).first()
             if role is None:
-                errors.append({
-                    'title': role,
-                    'list': [{'message':
-                                  "role.validation.id_does_not_exist" % {'id': role_uuid}}]
-                })
+                errors.append(
+                    {
+                        "title": role,
+                        "list": [
+                            {
+                                "message": "role.validation.id_does_not_exist"  # noqa: F504
+                                % {"id": role_uuid}
+                            }
+                        ],
+                    }
+                )
                 continue
             errors += set_role_deleted(role)
         if len(errors) == 1:
-            errors = errors[0]['list']
+            errors = errors[0]["list"]
         return errors
 
 
 class DuplicateRoleMutation(OpenIMISMutation):
     """
-        Duplicate a chosen role
+    Duplicate a chosen role
     """
+
     _mutation_module = "core"
     _mutation_class = "DuplicateRoleMutation"
 
@@ -1439,18 +1679,19 @@ class DuplicateRoleMutation(OpenIMISMutation):
     def async_mutate(cls, user, **data):
         try:
             if type(user) is AnonymousUser or not user.id:
-                raise PermissionDenied(_('mutation.authentication_required'))
+                raise PermissionDenied(_("mutation.authentication_required"))
             if not user.has_perms(CoreConfig.gql_mutation_duplicate_roles_perms):
                 raise PermissionDenied("unauthorized")
-            data['audit_user_id'] = user.id_for_audit
+            data["audit_user_id"] = user.id_for_audit
             duplicate_role(data, user)
             return None
         except Exception as exc:
             return [
                 {
-                    'message': "core.mutation.failed_to_duplicate_role",
-                    'detail': str(exc)
-                }]
+                    "message": "core.mutation.failed_to_duplicate_role",
+                    "detail": str(exc),
+                }
+            ]
 
 
 class UserBase:
@@ -1491,11 +1732,11 @@ class UserBase:
     user_types = graphene.List(UserTypeEnum, required=True)
 
 
-
 class CreateUserMutation(OpenIMISMutation):
     """
     Create a new user, the "core" one but also Interactive, Technical, Officer or Admin
     """
+
     _mutation_module = "core"
     _mutation_class = "CreateUserMutation"
 
@@ -1506,36 +1747,33 @@ class CreateUserMutation(OpenIMISMutation):
     def async_mutate(cls, user, **data):
         try:
             if type(user) is AnonymousUser or not user.id:
-                raise PermissionDenied(_('mutation.authentication_required'))
-            if User.objects.filter(username=data['username'], validity_to__isnull=True).exists():
+                raise PermissionDenied(_("mutation.authentication_required"))
+            if User.objects.filter(
+                username=data["username"], validity_to__isnull=True
+            ).exists():
                 raise ValidationError("User with this user name already exists.")
             if not user.has_perms(CoreConfig.gql_mutation_create_users_perms):
                 raise PermissionDenied("unauthorized")
             from core.utils import TimeUtils
-            data['validity_from'] = TimeUtils.now()
-            data['audit_user_id'] = user.id_for_audit
+
+            data["validity_from"] = TimeUtils.now()
+            data["audit_user_id"] = user.id_for_audit
             update_or_create_user(data, user)
             return None
         except ValidationError as ve:
-            logger.error(f'Validation error: {ve}')
-            return [
-                {
-                    'message': "core.mutation.validation_error",
-                    'detail': str(ve)
-                }
-            ]
+            logger.error(f"Validation error: {ve}")
+            return [{"message": "core.mutation.validation_error", "detail": str(ve)}]
         except Exception as exc:
             return [
-                {
-                    'message': "core.mutation.failed_to_create_user",
-                    'detail': str(exc)
-                }]
+                {"message": "core.mutation.failed_to_create_user", "detail": str(exc)}
+            ]
 
 
 class UpdateUserMutation(OpenIMISMutation):
     """
     Update an existing User and sub-user types
     """
+
     _mutation_module = "core"
     _mutation_class = "UpdateUserMutation"
 
@@ -1546,27 +1784,27 @@ class UpdateUserMutation(OpenIMISMutation):
     def async_mutate(cls, user, **data):
         try:
             if type(user) is AnonymousUser or not user.id:
-                raise PermissionDenied(_('mutation.authentication_required'))
+                raise PermissionDenied(_("mutation.authentication_required"))
             if not user.has_perms(CoreConfig.gql_mutation_update_users_perms):
                 raise PermissionDenied("unauthorized")
             from core.utils import TimeUtils
-            data['validity_from'] = TimeUtils.now()
-            data['audit_user_id'] = user.id_for_audit
+
+            data["validity_from"] = TimeUtils.now()
+            data["audit_user_id"] = user.id_for_audit
             update_or_create_user(data, user)
 
             return None
         except Exception as exc:
             return [
-                {
-                    'message': "core.mutation.failed_to_update_user",
-                    'detail': str(exc)
-                }]
+                {"message": "core.mutation.failed_to_update_user", "detail": str(exc)}
+            ]
 
 
 class DeleteUserMutation(OpenIMISMutation):
     """
     Delete a chosen user
     """
+
     _mutation_module = "core"
     _mutation_class = "DeleteUserMutation"
 
@@ -1579,19 +1817,23 @@ class DeleteUserMutation(OpenIMISMutation):
             raise PermissionDenied("unauthorized")
         errors = []
         for user_uuid in data["uuids"]:
-            user = User.objects \
-                .filter(id=user_uuid) \
-                .first()
+            user = User.objects.filter(id=user_uuid).first()
             if user is None:
-                errors.append({
-                    'title': user,
-                    'list': [{'message':
-                                  "user.validation.id_does_not_exist" % {'id': user_uuid}}]
-                })
+                errors.append(
+                    {
+                        "title": user,
+                        "list": [
+                            {
+                                "message": "user.validation.id_does_not_exist"  # noqa: F504
+                                % {"id": user_uuid}
+                            }
+                        ],
+                    }
+                )
                 continue
             errors += set_user_deleted(user)
         if len(errors) == 1:
-            errors = errors[0]['list']
+            errors = errors[0]["list"]
         return errors
 
 
@@ -1599,6 +1841,7 @@ class ChangeUserLanguageMutation(OpenIMISMutation):
     """
     Update an existing User Language and do not change history data
     """
+
     _mutation_module = "core"
     _mutation_class = "ChangeUserLanguageMutation"
 
@@ -1609,30 +1852,35 @@ class ChangeUserLanguageMutation(OpenIMISMutation):
     def async_mutate(cls, user, **data):
         try:
             if type(user) is AnonymousUser or not user.id:
-                raise PermissionDenied(_('mutation.authentication_required'))
-            data['audit_user_id'] = user.id_for_audit
+                raise PermissionDenied(_("mutation.authentication_required"))
+            data["audit_user_id"] = user.id_for_audit
             change_user_language(user, language_id=data["language_id"])
 
             return None
         except Exception as exc:
             return [
                 {
-                    'message': "core.mutation.failed_to_update_user_language",
-                    'detail': str(exc)
-                }]
+                    "message": "core.mutation.failed_to_update_user_language",
+                    "detail": str(exc),
+                }
+            ]
 
 
 @transaction.atomic
-@validate_payload_for_obligatory_fields(CoreConfig.fields_controls_user, 'data')
+@validate_payload_for_obligatory_fields(CoreConfig.fields_controls_user, "data")
 def update_or_create_user(data, user):
     imis_administrator_system = Role.objects.filter(is_system=64).get().id
     client_mutation_id = data.get("client_mutation_id", None)
     # client_mutation_label = data.get("client_mutation_label", None)
-    user_uuid = data.pop('uuid', None)
-    incoming_email = data.get('email')
+    user_uuid = data.pop("uuid", None)
+    incoming_email = data.get("email")
     if user_uuid:
-        
-        if uuid.UUID(str(user_uuid)) == uuid.UUID(str(user.id)) and user.is_imis_admin and imis_administrator_system not in data.get("roles", []):
+
+        if (
+            uuid.UUID(str(user_uuid)) == uuid.UUID(str(user.id))
+            and user.is_imis_admin
+            and imis_administrator_system not in data.get("roles", [])
+        ):
             raise ValidationError("Administrator cannot deprovision himself.")
         current_user = InteractiveUser.objects.filter(user__id=user_uuid).first()
 
@@ -1642,12 +1890,12 @@ def update_or_create_user(data, user):
             if not check_email_validity(incoming_email):
                 raise ValidationError(_("mutation.user_email_invalid"))
             if current_email != incoming_email:
-                if check_user_unique_email(user_email=data['email']):
+                if check_user_unique_email(user_email=data["email"]):
                     raise ValidationError(_("mutation.user_email_duplicated"))
         else:
             raise ValidationError(_("mutation.user_no_email_provided"))
 
-    username = data.get('username')
+    username = data.get("username")
 
     if len(username) > CoreConfig.username_code_length:
         raise ValidationError(_("mutation.user_username_too_long"))
@@ -1656,23 +1904,22 @@ def update_or_create_user(data, user):
         raise ValidationError(_("mutation.user_username_not_changeable"))
 
     if "client_mutation_id" in data:
-        data.pop('client_mutation_id')
+        data.pop("client_mutation_id")
     if "client_mutation_label" in data:
-        data.pop('client_mutation_label')
-    
-
+        data.pop("client_mutation_label")
 
     if UT_INTERACTIVE in data["user_types"]:
         i_user, i_user_created = create_or_update_interactive_user(
-            user_uuid, data, user.id_for_audit, len(data["user_types"]) > 1)
+            user_uuid, data, user.id_for_audit, len(data["user_types"]) > 1
+        )
     else:
-        i_user, i_user_created = None, False
+        i_user = None
     if UT_OFFICER in data["user_types"]:
-        health_facility_id = data.get('health_facility_id', None)
+        health_facility_id = data.get("health_facility_id", None)
         data_copied = data
         if health_facility_id:
             try:
-                apps.get_model('location', 'HealthFacility')
+                HealthFacility = apps.get_model("location", "HealthFacility")
                 hf = HealthFacility.objects.filter(id=health_facility_id).first()
                 if hf:
                     officer_location_id = hf.location
@@ -1680,20 +1927,32 @@ def update_or_create_user(data, user):
             except Exception as e:
                 logger.warning("Error %s ", str(e))
         officer, officer_created = create_or_update_officer(
-            user_uuid, data_copied, user.id_for_audit, UT_INTERACTIVE in data["user_types"])
+            user_uuid,
+            data_copied,
+            user.id_for_audit,
+            UT_INTERACTIVE in data["user_types"],
+        )
     else:
-        officer, officer_created = None, False
+        officer = None
     if UT_CLAIM_ADMIN in data["user_types"]:
         claim_admin, claim_admin_created = create_or_update_claim_admin(
-            user_uuid, data, user.id_for_audit, UT_INTERACTIVE in data["user_types"])
+            user_uuid, data, user.id_for_audit, UT_INTERACTIVE in data["user_types"]
+        )
     else:
-        claim_admin, claim_admin_created = None, False
+        claim_admin = None
     core_user, core_user_created = create_or_update_core_user(
-        user_uuid=user_uuid, username=username, i_user=i_user, officer=officer, claim_admin=claim_admin)
+        user_uuid=user_uuid,
+        username=username,
+        i_user=i_user,
+        officer=officer,
+        claim_admin=claim_admin,
+    )
 
     if client_mutation_id:
         wait_for_mutation(client_mutation_id)
-        UserMutation.object_mutated(user, core_user=core_user, client_mutation_id=client_mutation_id)
+        UserMutation.object_mutated(
+            user, core_user=core_user, client_mutation_id=client_mutation_id
+        )
     return core_user
 
 
@@ -1703,9 +1962,11 @@ def check_email_validity(email):
     # it omits some RFC recommendations by design
     # https://html.spec.whatwg.org/multipage/input.html#valid-e-mail-address
     import re
+
     regex = re.compile(
         r"^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9]"
-        r"(?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$")
+        r"(?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$"
+    )
     if not re.fullmatch(regex, email):
         return False
     return True
@@ -1724,22 +1985,35 @@ def set_user_deleted(user):
         user.delete_history()
         return []
     except Exception as exc:
-        logger.info("role.mutation.failed_to_change_status_of_user" % {'user': str(user)})
+        logger.debug(exc)
+        logger.info(
+            "role.mutation.failed_to_change_status_of_user" % {"user": str(user)}  # noqa: F504
+        )
         return {
             "title": user.id,
-            "list": [{
-                "message": "role.mutation.failed_to_change_status_of_user" % {'user': str(user)},
-                "detail": user.id}]
+            "list": [
+                {
+                    "message": "role.mutation.failed_to_change_status_of_user"  # noqa: F504
+                    % {"user": str(user)},
+                    "detail": user.id,
+                }
+            ],
         }
 
 
 def change_user_language(user, language_id):
     try:
-        updated_user = InteractiveUser.objects.filter(user__id=user.id, *filter_validity()).first()
+        updated_user = InteractiveUser.objects.filter(
+            user__id=user.id, *filter_validity()
+        ).first()
         updated_user.language_id = language_id
         updated_user.save()
     except Exception as exc:
-        logger.error("[OpenIMISMutation] Failed to change user language for user %s: %s", user.id, str(exc))
+        logger.error(
+            "[OpenIMISMutation] Failed to change user language for user %s: %s",
+            user.id,
+            str(exc),
+        )
         raise
 
 
@@ -1753,7 +2027,7 @@ class ChangePasswordMutation(graphene.relay.ClientIDMutation):
         username = graphene.String(
             required=False,
             description="By default, this operation works on the logged user,"
-                        "only administrators can run it on any user",
+            "only administrators can run it on any user",
         )
         old_password = graphene.String(
             required=False,
@@ -1766,12 +2040,12 @@ class ChangePasswordMutation(graphene.relay.ClientIDMutation):
 
     @classmethod
     def mutate_and_get_payload(
-            cls, root, info, new_password, old_password=None, username=None, **input
+        cls, root, info, new_password, old_password=None, username=None, **input
     ):
         try:
             user = info.context.user
             if type(user) is AnonymousUser or not user.id:
-                raise PermissionDenied(_('mutation.authentication_required'))
+                raise PermissionDenied(_("mutation.authentication_required"))
             change_user_password(
                 user,
                 username_to_update=username,
@@ -1856,7 +2130,7 @@ class SetPasswordMutation(graphene.relay.ClientIDMutation):
 
 
 class OpenimisObtainJSONWebToken(mixins.ResolveMixin, JSONWebTokenMutation):
-    """Obtain JSON Web Token mutation, with auto-provisioning from tblUsers """
+    """Obtain JSON Web Token mutation, with auto-provisioning from tblUsers"""
 
     @classmethod
     def mutate(cls, root, info, **kwargs):
@@ -1909,22 +2183,25 @@ class Mutation(graphene.ObjectType):
 
 
 def on_role_mutation(sender, **kwargs):
-    uuid = kwargs['data'].get('uuid', None)
+    uuid = kwargs["data"].get("uuid", None)
     if not uuid:
         return []
 
     # For duplicate log is created in the duplicate_role function, mutation log added here would reference original role
-    if "Role" in str(sender._mutation_class) and sender._mutation_class != 'DuplicateRoleMutation':
+    if (
+        "Role" in str(sender._mutation_class)
+        and sender._mutation_class != "DuplicateRoleMutation"
+    ):
         impacted = Role.objects.get(uuid=uuid)
         RoleMutation.objects.create(
-            role=impacted, mutation_id=kwargs['mutation_log_id']
+            role=impacted, mutation_id=kwargs["mutation_log_id"]
         )
 
     return []
 
 
 def on_user_mutation(sender, **kwargs):
-    uuid = kwargs['data'].get('uuid', None)
+    uuid = kwargs["data"].get("uuid", None)
     if not uuid:
         return []
 
@@ -1948,25 +2225,27 @@ def log_reset_password_attempt(request, username):
     user_agent = request.axes_user_agent
     attempt_time = request.axes_attempt_time
     attempt_data = {
-        'user_agent': user_agent,
-        'ip_address': ip_address,
-        'username': username,
-        'attempt_time': attempt_time,
-        'get_data': request.GET.dict(),
-        'post_data': request.POST.dict(),
-        'failures_since_start': 1,
-        'path_info': request.path,
+        "user_agent": user_agent,
+        "ip_address": ip_address,
+        "username": username,
+        "attempt_time": attempt_time,
+        "get_data": request.GET.dict(),
+        "post_data": request.POST.dict(),
+        "failures_since_start": 1,
+        "path_info": request.path,
     }
 
     try:
         with transaction.atomic():
             AccessAttempt.objects.create(**attempt_data)
     except IntegrityError:
-        attempt = AccessAttempt.objects.get(user_agent=user_agent, ip_address=ip_address, username=username)
+        attempt = AccessAttempt.objects.get(
+            user_agent=user_agent, ip_address=ip_address, username=username
+        )
         attempt.failures_since_start += 1
         attempt.attempt_time = attempt_time
-        attempt.get_data = attempt_data['get_data']
-        attempt.post_data = attempt_data['post_data']
+        attempt.get_data = attempt_data["get_data"]
+        attempt.post_data = attempt_data["post_data"]
         attempt.save()
 
 
@@ -1974,9 +2253,14 @@ def check_lockout(request):
     attempts = get_user_attempts(request)
     if attempts:
         from django.db.models import Max
+
         last_attempt_time = max(
-            (attempt.aggregate(Max('attempt_time'))['attempt_time__max'] for attempt in attempts if attempt.exists()),
-            default=None
+            (
+                attempt.aggregate(Max("attempt_time"))["attempt_time__max"]
+                for attempt in attempts
+                if attempt.exists()
+            ),
+            default=None,
         )
 
         if last_attempt_time:
@@ -1984,7 +2268,9 @@ def check_lockout(request):
             failure_count = handler.get_failures(request)
             if failure_count >= settings.AXES_FAILURE_LIMIT:
                 # Calculate the remaining time of the lockout
-                remaining_lockout_delta = settings.AXES_COOLOFF_TIME - (now() - last_attempt_time)
+                remaining_lockout_delta = settings.AXES_COOLOFF_TIME - (
+                    now() - last_attempt_time
+                )
                 remaining_minutes = int(remaining_lockout_delta.total_seconds() / 60)
                 raise GraphQLError(
                     f"Too many failed attempts."

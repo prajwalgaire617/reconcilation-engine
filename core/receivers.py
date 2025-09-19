@@ -14,6 +14,7 @@ def _post_save_eo_receiver(sender, instance, **kwargs):
         cache.delete(f"user_eo_{instance.code}")
         cache.delete(f"rights_{instance.code}")
 
+
 @receiver([post_save, post_delete], sender=Role)
 def _post_save_rolerights_receiver(sender, instance, **kwargs):
     with suppress(AttributeError):
@@ -21,9 +22,11 @@ def _post_save_rolerights_receiver(sender, instance, **kwargs):
             cache.delete("rights_*")
         else:
             cache.clear()
-        
-if 'claim' in sys.modules:
-    ClaimAdmin = apps.get_model('core', 'ClaimAdmin')
+
+
+if "claim" in sys.modules:
+    ClaimAdmin = apps.get_model("core", "ClaimAdmin")
+
     @receiver([post_save, post_delete], sender=ClaimAdmin)
     def _post_save_ca_receiver(sender, instance, **kwargs):
         with suppress(AttributeError):

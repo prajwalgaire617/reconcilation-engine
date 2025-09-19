@@ -5,10 +5,16 @@ from django.db.models.functions import Coalesce
 
 from core.models import Officer
 from location.models import Location, UserDistrict, HealthFacility
-from medical_pricelist.models import ServicesPricelist, ItemsPricelist, ServicesPricelistDetail, ItemsPricelistDetail
+from medical_pricelist.models import (
+    ServicesPricelist,
+    ItemsPricelist,
+    ServicesPricelistDetail,
+    ItemsPricelistDetail,
+)
 from payer.models import Payer
 from product.models import Product
 
+# flake8: noqa
 template = """
 {
   "docElements": [
@@ -5433,10 +5439,14 @@ def dispatch_results(data: dict, category: str, totals: dict, location_mapping: 
     """
     for element in data:
         if element["count"]:  # There might not be any record for a given location
-            location_id = element["location"] if element["location"] else FAKE_LOCATION_ID  # National data is going to be None
+            location_id = (
+                element["location"] if element["location"] else FAKE_LOCATION_ID
+            )  # National data is going to be None
             totals["global"][category] += element["count"]
 
-            if (location_id in location_mapping) or (location_id == FAKE_LOCATION_ID):  # = it's a known, active location
+            if (location_id in location_mapping) or (
+                location_id == FAKE_LOCATION_ID
+            ):  # = it's a known, active location
                 totals["by_location"][location_id][category] += element["count"]
 
                 # Handling regional level data is trickier because national-level data has no location defined
@@ -5450,7 +5460,6 @@ def dispatch_results(data: dict, category: str, totals: dict, location_mapping: 
             else:  # Inactive, archived location
                 totals["by_location"][FAKE_ARCHIVED_ID][category] += element["count"]
                 totals["by_region"][FAKE_REGION_ID][category] += element["count"]
-
 
 
 def format_global_totals(report_data: dict, totals: dict):
@@ -5469,7 +5478,9 @@ def format_final_data(totals: dict, location_mapping: dict):
         new_data_line = {**location_totals}
         region_id = find_region_id(location_id, location_mapping)
         add_regional_totals(new_data_line, region_id, totals)
-        add_region_district_labels(location_id, region_id, new_data_line, location_mapping)
+        add_region_district_labels(
+            location_id, region_id, new_data_line, location_mapping
+        )
         data.append(new_data_line)
     # order results by region, then district
     data.sort(key=lambda x: (x["region_code"], x["district_code"]))
@@ -5492,11 +5503,17 @@ def add_regional_totals(new_line: dict, region_id: int, totals: dict):
         new_line[new_key] = value
 
 
-def add_region_district_labels(location_id: int, region_id: int, new_data_line: dict, location_mapping: dict):
+def add_region_district_labels(
+    location_id: int, region_id: int, new_data_line: dict, location_mapping: dict
+):
     if region_id not in location_mapping:
         new_data_line["region_name"] = REGION_OTHER_NAME
         new_data_line["region_code"] = UNKNOWN_LOCATION_CODE
-        new_data_line["district_name"] = DISTRICT_NATIONAL_NAME if location_id == FAKE_LOCATION_ID else DISTRICT_ARCHIVED_NAME
+        new_data_line["district_name"] = (
+            DISTRICT_NATIONAL_NAME
+            if location_id == FAKE_LOCATION_ID
+            else DISTRICT_ARCHIVED_NAME
+        )
         new_data_line["district_code"] = UNKNOWN_LOCATION_CODE
     else:
         if location_id == region_id:
@@ -5513,9 +5530,19 @@ def add_region_district_labels(location_id: int, region_id: int, new_data_line: 
 
 def generate_other_subtotals(totals):
     # Prepares fake locations/regions in the totals dictionary for other cases
-    totals["by_region"][FAKE_REGION_ID] = generate_subtotals_dict()  # Fake region for all special cases
-    totals["by_location"][FAKE_LOCATION_ID] = generate_subtotals_dict()  # Fake location for national data (no location selected)
-    totals["by_location"][FAKE_ARCHIVED_ID] = generate_subtotals_dict()  # Fake location for erroneous data (archived location selected)
+    totals["by_region"][
+        FAKE_REGION_ID
+    ] = generate_subtotals_dict()  # Fake region for all special cases
+    totals["by_location"][
+        FAKE_LOCATION_ID
+    ] = (
+        generate_subtotals_dict()
+    )  # Fake location for national data (no location selected)
+    totals["by_location"][
+        FAKE_ARCHIVED_ID
+    ] = (
+        generate_subtotals_dict()
+    )  # Fake location for erroneous data (archived location selected)
 
 
 def fetch_users(location_ids_mapping: dict, search_filters: Q, totals: dict):
@@ -5529,22 +5556,34 @@ def fetch_payers(location_ids_mapping: dict, search_filters: Q, totals: dict):
     dispatch_results(payers, CATEGORY_PAYERS, totals, location_ids_mapping)
 
 
-def fetch_item_pricelist_details(location_ids_mapping: dict, item_details_filters: Q, totals: dict):
+def fetch_item_pricelist_details(
+    location_ids_mapping: dict, item_details_filters: Q, totals: dict
+):
     # can be national (no district, no region)
-    item_pl_details = ItemsPricelistDetail.objects.filter(item_details_filters) \
-                                                  .values(location=F("items_pricelist__location")) \
-                                                  .annotate(count=Count(Coalesce("location", 0))) \
-                                                  .order_by()
-    dispatch_results(item_pl_details, CATEGORY_ITEM_PL_DETAILS, totals, location_ids_mapping)
+    item_pl_details = (
+        ItemsPricelistDetail.objects.filter(item_details_filters)
+        .values(location=F("items_pricelist__location"))
+        .annotate(count=Count(Coalesce("location", 0)))
+        .order_by()
+    )
+    dispatch_results(
+        item_pl_details, CATEGORY_ITEM_PL_DETAILS, totals, location_ids_mapping
+    )
 
 
-def fetch_service_pricelist_details(location_ids_mapping: dict, service_details_filters: Q, totals: dict):
+def fetch_service_pricelist_details(
+    location_ids_mapping: dict, service_details_filters: Q, totals: dict
+):
     # can be national (no district, no region)
-    service_pl_details = ServicesPricelistDetail.objects.filter(service_details_filters) \
-                                                        .values(location=F("services_pricelist__location")) \
-                                                        .annotate(count=Count(Coalesce("location", 0))) \
-                                                        .order_by()
-    dispatch_results(service_pl_details, CATEGORY_SERVICE_PL_DETAILS, totals, location_ids_mapping)
+    service_pl_details = (
+        ServicesPricelistDetail.objects.filter(service_details_filters)
+        .values(location=F("services_pricelist__location"))
+        .annotate(count=Count(Coalesce("location", 0)))
+        .order_by()
+    )
+    dispatch_results(
+        service_pl_details, CATEGORY_SERVICE_PL_DETAILS, totals, location_ids_mapping
+    )
 
 
 def fetch_item_pricelists(location_ids_mapping: dict, search_filters: Q, totals: dict):
@@ -5553,13 +5592,17 @@ def fetch_item_pricelists(location_ids_mapping: dict, search_filters: Q, totals:
     dispatch_results(item_pls, CATEGORY_ITEM_PLS, totals, location_ids_mapping)
 
 
-def fetch_service_pricelists(location_ids_mapping: dict, search_filters: Q, totals: dict):
+def fetch_service_pricelists(
+    location_ids_mapping: dict, search_filters: Q, totals: dict
+):
     # can be national (no district, no region)
     service_pls = fetch_aggregated_data_count(ServicesPricelist.objects, search_filters)
     dispatch_results(service_pls, CATEGORY_SERVICE_PLS, totals, location_ids_mapping)
 
 
-def fetch_health_facilities(location_ids_mapping: dict, search_filters: Q, totals: dict):
+def fetch_health_facilities(
+    location_ids_mapping: dict, search_filters: Q, totals: dict
+):
     hfs = fetch_aggregated_data_count(HealthFacility.objects, search_filters)
     dispatch_results(hfs, CATEGORY_HFS, totals, location_ids_mapping)
 
@@ -5570,36 +5613,55 @@ def fetch_products(location_ids_mapping: dict, search_filters: Q, totals: dict):
     dispatch_results(products, CATEGORY_PRODUCTS, totals, location_ids_mapping)
 
 
-def fetch_inactive_officers(location_ids_mapping: dict, search_filters: Q, totals: dict):
+def fetch_inactive_officers(
+    location_ids_mapping: dict, search_filters: Q, totals: dict
+):
     # can be national (no district)
     today = datetime.date.today()
     inactive_search_filters = search_filters & Q(works_to__lte=today)
-    inactive_officers = fetch_aggregated_data_count(Officer.objects, inactive_search_filters)
-    dispatch_results(inactive_officers, CATEGORY_INACTIVE_EO, totals, location_ids_mapping)
+    inactive_officers = fetch_aggregated_data_count(
+        Officer.objects, inactive_search_filters
+    )
+    dispatch_results(
+        inactive_officers, CATEGORY_INACTIVE_EO, totals, location_ids_mapping
+    )
 
 
 def fetch_active_officers(location_ids_mapping: dict, search_filters: Q, totals: dict):
     # can be national (no district)
     today = datetime.date.today()
-    active_search_filters = search_filters & \
-                            (Q(works_to__isnull=True) | Q(works_to__gt=today))
-    active_officers = fetch_aggregated_data_count(Officer.objects, active_search_filters)
+    active_search_filters = search_filters & (
+        Q(works_to__isnull=True) | Q(works_to__gt=today)
+    )
+    active_officers = fetch_aggregated_data_count(
+        Officer.objects, active_search_filters
+    )
     dispatch_results(active_officers, CATEGORY_ACTIVE_EO, totals, location_ids_mapping)
 
 
 def fetch_aggregated_data_count(manager: Manager, search_filters: Q):
     # The Count(Coalesce()) allows to group and count NULL values
-    return manager.filter(search_filters) \
-                  .values("location") \
-                  .annotate(count=Count(Coalesce("location", 0))) \
-                  .order_by()
+    return (
+        manager.filter(search_filters)
+        .values("location")
+        .annotate(count=Count(Coalesce("location", 0)))
+        .order_by()
+    )
 
 
-def prepare_totals_and_locations(active_locations: QuerySet, location_ids_mapping: dict, totals: dict, region_id: int, district_id: int):
+def prepare_totals_and_locations(
+    active_locations: QuerySet,
+    location_ids_mapping: dict,
+    totals: dict,
+    region_id: int,
+    district_id: int,
+):
     # Prepares the totals dictionary and adds each location to the mapping
     for location in active_locations:
         location_ids_mapping[location["id"]] = location
-        if location["type"] != LOCATION_TYPE_REGION or district_id == ALL_DISTRICTS:  # Don't want to add regional data when a district is specified
+        if (
+            location["type"] != LOCATION_TYPE_REGION or district_id == ALL_DISTRICTS
+        ):  # Don't want to add regional data when a district is specified
             totals["by_location"][location["id"]] = generate_subtotals_dict()
         if location["type"] == LOCATION_TYPE_REGION:
             totals["by_region"][location["id"]] = generate_subtotals_dict()
@@ -5607,14 +5669,17 @@ def prepare_totals_and_locations(active_locations: QuerySet, location_ids_mappin
         generate_other_subtotals(totals)
 
 
-def registers_status_query(user,
-                           requested_region_id: int = ALL_REGIONS,
-                           requested_district_id: int = ALL_DISTRICTS,
-                           **kwargs):
+def registers_status_query(
+    user,
+    requested_region_id: int = ALL_REGIONS,
+    requested_district_id: int = ALL_DISTRICTS,
+    **kwargs,
+):
     """
     Generates data form the registers status report.
 
-    This function can take a region ID and/or a district ID as parameter and counts the use of each region/district in the following models:
+    This function can take a region ID and/or a district ID as parameter
+      and counts the use of each region/district in the following models:
     - Officer
     - UserDistrict
     - Product
@@ -5625,63 +5690,80 @@ def registers_status_query(user,
     - ItemPricelistDetails
     - Payer
 
-    Note: if there is set on a national level (no location selected) and a district parameter is sent, the national data doesn't show up in the report
+    Note: if there is set on a national level (no location selected) 
+      and a district parameter is sent, the national data doesn't show up in the report
 
     """
     # Checking the parameters received and returning an error if anything is wrong
     region_id = int(requested_region_id)
     if region_id != ALL_REGIONS:
-        region = Location.objects.filter(validity_to=None, type='R', id=region_id).first()
+        region = Location.objects.filter(
+            validity_to=None, type="R", id=region_id
+        ).first()
         if not region:
             return {"error": "Error - the requested region does not exist"}
     district_id = int(requested_district_id)
     if district_id != ALL_DISTRICTS:
         district_filters = Q(validity_to__isnull=True) & Q(type="D") & Q(id=district_id)
-        if region_id != ALL_REGIONS:  # The FE pickers allow you to select a district without a region, so additional steps are required
+        if (
+            region_id != ALL_REGIONS
+        ):  # The FE pickers allow you to select a district without a region, so additional steps are required
             district_filters &= Q(parent_id=region_id)
         district = Location.objects.filter(district_filters).first()
         if not district:
             return {"error": "Error - the requested district does not exist"}
-        if region_id == ALL_REGIONS:  # The FE pickers allow you to select a district without a region, so additional steps are required
+        if (
+            region_id == ALL_REGIONS
+        ):  # The FE pickers allow you to select a district without a region, so additional steps are required
             region = district.parent
             region_id = region.id
 
     # Preparing data for the header table
     header = {
-        "region": "All regions" if region_id == ALL_REGIONS else f"{region.code} - {region.name}",
-        "district": "All districts" if district_id == ALL_DISTRICTS else f"{district.code} - {district.name}",
+        "region": (
+            "All regions"
+            if region_id == ALL_REGIONS
+            else f"{region.code} - {region.name}"
+        ),
+        "district": (
+            "All districts"
+            if district_id == ALL_DISTRICTS
+            else f"{district.code} - {district.name}"
+        ),
     }
-    report_data = {
-        "header": [header]
-    }
+    report_data = {"header": [header]}
 
     # Preparing filters of making a list of active locations, which will be the base of this report
     active_location_filters = Q(validity_to__isnull=True)
     if district_id != ALL_DISTRICTS:
-        active_location_filters &= (Q(id=district_id) | Q(id=region_id))
+        active_location_filters &= Q(id=district_id) | Q(id=region_id)
     elif region_id != ALL_REGIONS:
-        active_location_filters &= (Q(id=region_id) | Q(parent_id=region_id))
+        active_location_filters &= Q(id=region_id) | Q(parent_id=region_id)
     else:
-        active_location_filters &= Q(type__in=['R', 'D'])
+        active_location_filters &= Q(type__in=["R", "D"])
 
     # Preparing the list of locations & totals
-    active_locations = Location.objects.filter(active_location_filters) \
-                                       .values("id", "code", "name", "type", "parent_id") \
-                                       .order_by("-type", "code")
+    active_locations = (
+        Location.objects.filter(active_location_filters)
+        .values("id", "code", "name", "type", "parent_id")
+        .order_by("-type", "code")
+    )
     location_ids_mapping = {}
     totals = {
         "global": generate_subtotals_dict(),
         "by_region": {},
         "by_location": {},
     }
-    prepare_totals_and_locations(active_locations, location_ids_mapping, totals, region_id, district_id)
+    prepare_totals_and_locations(
+        active_locations, location_ids_mapping, totals, region_id, district_id
+    )
 
     # Prepare the location filters
     search_filters = Q(validity_to__isnull=True)
     if district_id != ALL_DISTRICTS:
         search_filters &= Q(location_id=district_id)
     elif region_id != ALL_REGIONS:
-        search_filters &= (Q(location__parent_id=region_id) | Q(location_id=region_id))
+        search_filters &= Q(location__parent_id=region_id) | Q(location_id=region_id)
 
     # Fetch every data type
     fetch_active_officers(location_ids_mapping, search_filters, totals)
@@ -5698,20 +5780,20 @@ def registers_status_query(user,
     if district_id != ALL_DISTRICTS:
         service_details_filters &= Q(services_pricelist__location_id=district_id)
     elif region_id != ALL_REGIONS:
-        service_details_filters &= (
-                Q(services_pricelist__location__parent_id=region_id)
-                | Q(services_pricelist__location_id=region_id)
-        )
-    fetch_service_pricelist_details(location_ids_mapping, service_details_filters, totals)
+        service_details_filters &= Q(
+            services_pricelist__location__parent_id=region_id
+        ) | Q(services_pricelist__location_id=region_id)
+    fetch_service_pricelist_details(
+        location_ids_mapping, service_details_filters, totals
+    )
 
     # Special filter as location is not directly stored in the object
     item_details_filters = Q(validity_to__isnull=True)
     if district_id != ALL_DISTRICTS:
         item_details_filters &= Q(items_pricelist__location_id=district_id)
     elif region_id != ALL_REGIONS:
-        item_details_filters &= (
-                Q(items_pricelist__location__parent_id=region_id)
-                | Q(items_pricelist__location_id=region_id)
+        item_details_filters &= Q(items_pricelist__location__parent_id=region_id) | Q(
+            items_pricelist__location_id=region_id
         )
     fetch_item_pricelist_details(location_ids_mapping, item_details_filters, totals)
 
