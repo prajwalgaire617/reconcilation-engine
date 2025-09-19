@@ -4,6 +4,7 @@ import uuid
 import decimal
 from django.test import TestCase
 from django.db import connections
+from django.db.models import Q
 from django.test.runner import DiscoverRunner
 from django.test.utils import get_unique_databases_and_mirrors
 
@@ -64,6 +65,22 @@ class UtilsTestCase(TestCase):
 
         decimal_obj = decimal.Decimal("12345.6789")
         self.assertEquals(to_json_safe_value(decimal_obj), str(decimal_obj))
+        
+        
+    def test_is_admin_rights(self):
+        from core.models import User, RoleRight, UserRole
+        from core.utils import to_list_permissions, filter_validity
+        user = User.objects.filter(username="Admin", *filter_validity()).first()
+        # removing all role but admin
+        UserRole.objects.filter(~Q(role__is_system=64), user=user._u,*filter_validity()).delete
+        # removing all admin rights
+        RoleRight.objects.filter(role__is_system=64,*filter_validity()).delete()
+        rights = list(user.rights)
+        rights_db = [rr.right_id for rr in RoleRight.filter_queryset().filter(
+                role__is_system=64, *filter_validity(prefix='role__')).distinct()]
+        self.assertEquals(len(rights_db), 0, "all roleright are not removed")
+        self.assertEquals(len(rights), len(to_list_permissions()), "rights are not equal to all right available")
+        self.assertNotEquals(len(rights_db), len(rights), "rights should not be null for admin")
     
     
     def test_cache_invalidation(self):
@@ -86,5 +103,4 @@ class UtilsTestCase(TestCase):
         self.assertNotEquals(users, users_filter, "should be the same list even if user_filter comes partially from cache")
         caches['default'].clear()
         User.USE_CACHE = False
-
 
