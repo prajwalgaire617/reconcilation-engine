@@ -6,6 +6,7 @@ from django.db.models import Q
 
 from core.utils import full_class_name, comparable, to_json_safe_value
 from core.datetimes.ad_datetime import AdDate, AdDatetime
+from core.test_helpers import create_test_interactive_user
 
 
 class ComparableTest(TestCase):
@@ -61,14 +62,16 @@ class UtilsTestCase(TestCase):
         self.assertEquals(to_json_safe_value(decimal_obj), str(decimal_obj))
 
     def test_is_admin_rights(self):
-        from core.models import User, RoleRight, UserRole
+        from core.models import User, RoleRight, UserRole, Role
         from core.utils import to_list_permissions, filter_validity
-
+        role = Role.objects.filter(is_system=64, *filter_validity()).first()
         user = User.objects.filter(username="Admin", *filter_validity()).first()
+        if not user:
+            user = create_test_interactive_user(username="Admin", roles=[role.id])
         # removing all role but admin
         UserRole.objects.filter(
             ~Q(role__is_system=64), user=user._u, *filter_validity()
-        ).delete
+        ).delete()
         # removing all admin rights
         RoleRight.objects.filter(role__is_system=64, *filter_validity()).delete()
         rights = list(user.rights)
