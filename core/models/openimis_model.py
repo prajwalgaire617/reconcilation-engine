@@ -30,15 +30,9 @@ class OpenIMISModel(DirtyFieldsMixin, CachedModelMixin, Model):
     active = BooleanField(default=True)
 
     json_ext = JSONField(db_column="Json_ext", blank=True, null=True)
-    date_deactivated = DateTimeField(
-       null=True, default=None
-    )
-    date_created = DateTimeField(
-        null=True, default=py_datetime.now
-    )
-    date_updated = DateTimeField(
-         null=True, default=py_datetime.now
-    )
+    date_deactivated = DateTimeField(null=True, default=None)
+    date_created = DateTimeField(null=True, default=py_datetime.now)
+    date_updated = DateTimeField(null=True, default=py_datetime.now)
     user_created = ForeignKey(
         "core.User",
         related_name="%(class)s_user_created",
