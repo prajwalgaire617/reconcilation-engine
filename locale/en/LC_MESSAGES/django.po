@@ -24,6 +24,7 @@ msgstr ""
 msgid "unauthorized"
 msgstr "User not authorized for this operation"
 
+#, fuzzy
 msgid "unauthorized.location"
 msgstr "User not authorized for this operation due to limited location permissions"
 
