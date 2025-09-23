@@ -45,9 +45,9 @@ class Command(compilemessages.Command):
         apps = []
         for mod in load_openimis_conf()["modules"]:
             mod_name = mod["name"]
-            print(f"Makemessage module: {mod_name}")
             with resources.path(mod_name, "__init__.py") as path:
                 os.chdir(path.parent.parent)
+                print(f'Trying to run makemessages in {mod_name} with locale={locale}')
                 call_command('makemessages', locale=locale)
                 apps.append(path.parent.parent)  # This might need to be more restrictive
 
