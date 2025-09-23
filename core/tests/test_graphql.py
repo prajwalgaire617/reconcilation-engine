@@ -3,7 +3,6 @@ from core.models.openimis_graphql_test_case import (
     BaseTestContext,
 )
 from core.test_helpers import create_test_interactive_user
-from core import filter_validity
 from location.models import Location
 import json
 
@@ -22,7 +21,7 @@ class gqlTest(openIMISGraphQLTestCase):
         )
         cls.admin_token_context = BaseTestContext(user=cls.admin_user)
         cls.admin_token = cls.admin_token_context.get_jwt()
-        cls.disctict = Location.objects.filter(type="D", *filter_validity()).first()
+        cls.disctict = Location.objects.filter(type="D", *Location.filter_validity()).first()
 
     def test_login_successful(self):
         variables = {

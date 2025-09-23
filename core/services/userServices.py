@@ -16,13 +16,15 @@ from core.validation.obligatoryFieldValidation import (
 )
 from django.contrib.auth import authenticate
 from rest_framework import exceptions
-from core.utils import filter_validity
 from django.db.models import Q
 
 logger = logging.getLogger(__file__)
 
 
 def create_or_update_interactive_user(user_id, data, audit_user_id, connected):
+    admin = User.objects.filter(i_user_id=1).first()
+    if not admin:
+        User.objects.create(username="Admin", i_user_id=1)
     i_fields = {
         "username": "login_name",
         "other_names": "other_names",
@@ -309,8 +311,8 @@ def check_user_unique_email(user_email):
 def reset_user_password(request, username):
     user = User.objects.filter(
         Q(username=username) | Q(i_user__email=username),
-        *filter_validity(),
-        *filter_validity(prefix="i_user__"),
+        *User.filter_validity(),
+        *InteractiveUser.filter_validity(prefix="i_user__"),
     ).first()
     # we don't want to inform is a username was not found
     if not user:

@@ -20,6 +20,8 @@ from zxcvbn import zxcvbn
 import datetime
 from django.core.cache import caches
 from functools import lru_cache
+from django.db import transaction
+# from simple_history.utils import update_change_reason
 
 
 logger = logging.getLogger(__file__)
@@ -925,3 +927,59 @@ def to_list_permissions():
         for perm_ids in app_perms.values():
             all_perms.update(perm_ids)
     return sorted(list(all_perms))
+
+
+def migrate_from_versioned_to_history(model_class, history_model_class):
+    """
+    Migrates records with non-null validity_to to the history model for the given model class.
+
+    Args:
+        model_class: The Django model class to migrate (e.g., InteractiveUser).
+        history_model_class: The corresponding history model class (e.g., HistoricalInteractiveUser).
+
+    Returns:
+        str: A message indicating the number of records migrated.
+    """
+    records_to_migrate = model_class.objects.filter(validity_to__isnull=False)
+    migrated_count = 0
+
+    with transaction.atomic():
+        for record in records_to_migrate:
+            try:
+                # Create a history record
+                history_record = history_model_class()
+
+                # Copy all fields from the original record
+                for field in record._meta.get_fields():
+                    if field.name not in ['history']:  # Skip id and history fields
+                        if field.is_relation:
+                            if field.many_to_one or field.one_to_one:
+                                try:
+                                    setattr(history_record, field.name, getattr(record, field.name))
+                                except Exception as e:
+                                    logger.warning(f"Failed to copy relation field {field.name}: {e}")
+                        else:
+                            setattr(history_record, field.name, getattr(record, field.name))
+
+                # Set history-specific fields
+                history_record.history_date = record.validity_to or datetime.datetime.now()
+                history_record.history_change_reason = "Migrated to history"
+                history_record.history_type = '~'  # Update operation
+
+                # Save the history record
+                history_record.save()
+
+                # Update change reason
+                # update_change_reason(history_record, "Migrated to history")
+
+                # Delete the original record from the main table
+                record.delete()
+                migrated_count += 1
+
+            except Exception as e:
+                logger.error(f"Error migrating record {record.id}: {e}")
+                raise
+
+    result = f"Migrated {migrated_count} records to history for {model_class.__name__}"
+    logger.info(result)
+    return result

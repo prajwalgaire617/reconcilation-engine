@@ -6,7 +6,7 @@ from django.db import models
 
 from core.utils import CachedManager, CachedModelMixin
 from ..fields import DateTimeField
-from ..utils import filter_validity
+from ..utils import filter_validity as core_filter_validity
 import logging
 
 logger = logging.getLogger(__name__)
@@ -18,6 +18,10 @@ class BaseVersionedModel(CachedModelMixin, models.Model):
 
     # Use our custom CachedManager for object retrieval
     objects = CachedManager()
+
+    # to ease migration
+    def filter_validity(arg="validity", prefix="", **kwargs):
+        return core_filter_validity(arg, prefix, **kwargs)
 
     def update(self, *args, **kwargs):
         """
@@ -79,7 +83,7 @@ class BaseVersionedModel(CachedModelMixin, models.Model):
     def filter_queryset(cls, queryset=None):
         if queryset is None:
             queryset = cls.objects.all()
-        queryset = queryset.filter(*filter_validity())
+        queryset = queryset.filter(*core_filter_validity())
         return queryset
 
 

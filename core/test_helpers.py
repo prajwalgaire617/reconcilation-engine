@@ -1,4 +1,4 @@
-from core.models import Officer, InteractiveUser, User, TechnicalUser, filter_validity
+from core.models import Officer, InteractiveUser, User, TechnicalUser
 from core.models.openimis_graphql_test_case import openIMISGraphQLTestCase
 from core.models.user import ClaimAdmin
 from core.services.userServices import (
@@ -48,7 +48,7 @@ def create_test_officer(valid=True, custom_props=None, villages=[]):
         eo = Officer.objects.create(**data)
 
     if not villages:
-        villages == Location.objects.filter(*filter_validity(), type="V").first()
+        villages == Location.objects.filter(*Location.filter_validity(), type="V").first()
     if eo:
         _ = create_or_update_officer_villages(eo, [v.id for v in villages], 1)
         return eo
@@ -60,6 +60,10 @@ def create_test_interactive_user(
     roles=None,
     custom_props=None,
 ):
+    # to ensure the resource could be saved
+    admin = User.objects.filter(i_user_id=1).first()
+    if not admin:
+        User.objects.create(username="Admin", i_user_id=1)
     if custom_props is None:
         custom_props = {}
     else:
