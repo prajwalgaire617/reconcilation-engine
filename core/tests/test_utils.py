@@ -4,10 +4,14 @@ import decimal
 from django.test import TestCase
 from django.db.models import Q
 
-from core.utils import full_class_name, comparable, to_json_safe_value
+from core.utils import (
+    full_class_name, comparable, to_json_safe_value,
+    to_list_permissions, filter_validity, collect_all_gql_permissions
+)
 from core.datetimes.ad_datetime import AdDate, AdDatetime
 from core.test_helpers import create_test_interactive_user
-
+from core.models import User, RoleRight, UserRole, Role
+from django.core.cache import caches
 
 class ComparableTest(TestCase):
     def test_generic_eq(self):
@@ -62,8 +66,6 @@ class UtilsTestCase(TestCase):
         self.assertEquals(to_json_safe_value(decimal_obj), str(decimal_obj))
 
     def test_is_admin_rights(self):
-        from core.models import User, RoleRight, UserRole, Role
-        from core.utils import to_list_permissions, filter_validity
         role = Role.objects.filter(is_system=64, *filter_validity()).first()
         user = User.objects.filter(username="Admin", *filter_validity()).first()
         if not user:
@@ -88,15 +90,33 @@ class UtilsTestCase(TestCase):
             "rights are not equal to all right available",
         )
         self.assertNotEquals(
-            len(rights_db), len(rights), "rights should not be null for admin"
+            len(rights_db), len(rights), 
+            "admin should always get all permissions regardless of their RoleRight stored in DB"
         )
-
+    CORE_PERMS = [
+        '121701', '121702', '121703', '121704',
+        '122001', '122002', '122003', '122006', '122005', '122004',
+        '121501', '121502', '121503', '121504',
+        '121601', '121602', '121603', '121604',
+        '900101'
+    ]
+    def test_collect_all_gql_permissions(self):
+        perms = collect_all_gql_permissions()
+        self.assertTrue('core' in perms)
+        core_perms = perms['core']
+        all_core_perm = []
+        for core_perms in perms['core'].values():
+            for core_perm in core_perms:
+                all_core_perm.append(core_perm)
+        self.assertEqual(sorted(all_core_perm), sorted(self.CORE_PERMS), "Missmatch for the expected core perms")
+        
+    def test_to_list_permissions(self):
+        perm_list = to_list_permissions()
+        for perm in self.CORE_PERMS:
+            self.assertTrue( perm in perm_list, f"This perm {perm} from core is not return ")
+    
     def test_cache_invalidation(self):
-        from core.models import User
-
         User.USE_CACHE = True
-        from django.core.cache import caches
-
         users = list(User.objects.all())
         users_id = [user.id for user in users]
         users_0_no_cache_get = User.objects.get(id=users_id[0])
