@@ -13,6 +13,7 @@ from core.test_helpers import create_test_interactive_user
 from core.models import User, RoleRight, UserRole, Role
 from django.core.cache import caches
 
+
 class ComparableTest(TestCase):
     def test_generic_eq(self):
         @comparable
@@ -90,7 +91,7 @@ class UtilsTestCase(TestCase):
             "rights are not equal to all right available",
         )
         self.assertNotEquals(
-            len(rights_db), len(rights), 
+            len(rights_db), len(rights),
             "admin should always get all permissions regardless of their RoleRight stored in DB"
         )
     CORE_PERMS = [
@@ -100,6 +101,7 @@ class UtilsTestCase(TestCase):
         '121601', '121602', '121603', '121604',
         '900101'
     ]
+
     def test_collect_all_gql_permissions(self):
         perms = collect_all_gql_permissions()
         self.assertTrue('core' in perms)
@@ -109,12 +111,12 @@ class UtilsTestCase(TestCase):
             for core_perm in core_perms:
                 all_core_perm.append(core_perm)
         self.assertEqual(sorted(all_core_perm), sorted(self.CORE_PERMS), "Missmatch for the expected core perms")
-        
+
     def test_to_list_permissions(self):
         perm_list = to_list_permissions()
         for perm in self.CORE_PERMS:
-            self.assertTrue( perm in perm_list, f"This perm {perm} from core is not return ")
-    
+            self.assertTrue(perm in perm_list, f"This perm {perm} from core is not return ")
+
     def test_cache_invalidation(self):
         User.USE_CACHE = True
         users = list(User.objects.all())
