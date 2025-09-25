@@ -16,7 +16,7 @@ It is a required module of [openimis-be_py](https://github.com/openimis/openimis
 ## ORM mapping:
 * UUIDModel: abstract model for new entities (and later on migrated entities), enforcing the use of UUID is identifier
 * VersionedModel: abstract model implementing the legacy 'in table archiving' mechanism
-* HistoryModel: abstract model implementing the django-simple-history archiving mechanism with standard mutaitons 
+* HistoryModel: abstract model implementing the django-simple-history archiving mechanism with standard mutations 
 * HistoryBusinessModel: abstract model implementing the django-simple-history archiving mechanism with ValidFrom and ValidTo date and with standard and replace mutations
 * core_ModuleConfiguration > ModuleConfiguration: a generic entity each module should use to let (admin)users provide the expected configuration (via a central management console).
 * core_FieldControl > FieldControl: allow to hide or mark readonly fields in UI (tables, forms,...)
@@ -67,7 +67,7 @@ from core.fields import DateField, DateTimeField
 ```
 
 ### UserManager
-openIMIS backend is configured for SSO, receiving the user (login) in the REMOTE_USER http header. Since django security is defined uppon User (core_User table), the UserManager auto-provision the received login (REMOTE_USER) as User, binding it (i_user) to the corresponding InteractiveUser record.
+openIMIS backend is configured for SSO, receiving the user (login) in the REMOTE_USER http header. Since django security is defined upon User (core_User table), the UserManager auto-provision the received login (REMOTE_USER) as User, binding it (i_user) to the corresponding InteractiveUser record.
 The auto-provisioning assigns a default Group (name can be parameterized) from which django permissions are calculated (with UserRole - Role - RoleRight contributed from InteractiveUser).
 Note: if not existing, the default group is created at startup.
 
@@ -114,7 +114,7 @@ If the callback returns an array of error message:
 ```
 If the callback returns None (or an empty array), the mutation is marked as successful.
 
-__Important Note__: by default the callback is executed __in transaction__ and, as a consequence, will (in case of exception/errors) cancel the complete mutation. If this is not the desired behaviour, the callback must explicitely detach to separate transaction (process).
+__Important Note__: by default the callback is executed __in transaction__ and, as a consequence, will (in case of exception/errors) cancel the complete mutation. If this is not the desired behaviour, the callback must explicitly detach to separate transaction (process).
 
 #### Extending mutations with signals
 Signal callbacks could use mutationExtensions JSON field to receive additional data from mutation payload. This
@@ -139,7 +139,7 @@ function to connect new signals. Receivers can be registered also in other place
 
 #### Modules Scheduled Tasks
 To add a scheduled task directly from within a module, add the file `scheduled_tasks.py` 
-in the module package. From there, the function `schedule_tasks` accepting `BackgroundScheudler` 
+in the module package. From there, the function `schedule_tasks` accepting `BackgroundScheduler` 
 as argument must be accessible. 
 
 **Example content of scheduled_tasks.py:**
@@ -147,7 +147,7 @@ as argument must be accessible.
 def module_task():
     ...
 
-def schedule_tasks(scheduler: BackgroundScheduler): # Has to accept BackgroundScheudler as input
+def schedule_tasks(scheduler: BackgroundScheduler): # Has to accept BackgroundScheduler as input
     scheduler.add_job(
         module_task,
         trigger=CronTrigger(hour=8),  # Daily at 8 AM
@@ -161,7 +161,7 @@ set to `True`.
 ### Graphene Custom Types & Helper Classes/Methods
 * schema.SmallInt: Integer, with values ranging from -32768 to +32767
 * schema.TinyInt: Integer (8 bit), with values ranging from 0 to 255
-* utils.filter_validity: many openIMIS entities have a validity_from/validity_to, this filters provides a helper implementing the vality logic based on date (today if None)
+* utils.filter_validity: many openIMIS entities have a validity_from/validity_to, this filters provides a helper implementing the validity logic based on date (today if None)
 Sample usage:
 ```
 Insuree.objects.get(
@@ -235,14 +235,14 @@ TechnicalUserForm (ability to add technical users from the console)
   which allows filtering by json field attributes in the SQL Server database. Filtering by simple data types and nested 
   arguments. The use is as follows:
   ```
-  claim.objects.filter(json_ext__jsoncontains={'amount': 10.00, 'adress': { 'country': 'X', 'city': 'Y'}})
+  claim.objects.filter(json_ext__jsoncontains={'amount': 10.00, 'address': { 'country': 'X', 'city': 'Y'}})
   ```
 * jsoncontainskey - another custom filtering parameter for json fields. Equivalent to `__contains` search on
   underlying serialized json string. It allows queries as:
   ```
   claim.objects.filter(json_ext__jsoncontainskey='amount')
   ```
-  This query searches for `"amouunt":` in json string, so it will match keys in nested json objects
+  This query searches for `"amount":` in json string, so it will match keys in nested json objects
   
 ### WebSocket client
 The module gives access to WebSocket clients allowing external socket communication. 
@@ -270,7 +270,7 @@ with websocket_instance.connect() as connection: # keeps connection open
 ## Abstract calculation rule class
 * core/abs_calculation_rule: here is defined the abstract calculation rule class that might be used
     for defining some calculation rules.
-* class is a representation of calculation rule. Here are defined some informations about rule and how some actions 
+* class is a representation of calculation rule. Here are defined some information about rule and how some actions 
     are implemented. 
 * members
   - version (static) - the version is used to keep track of the changes in the version of the calculation rule,
@@ -347,7 +347,7 @@ CLASS_RULE_PARAM_VALIDATION = [
   - get_linked_class(List[classname]) - that function will return the possible instance that can have a link to the calculation
   - convert(instance, convert_to, **argv) - Convert on or several object toward another type, especially to invoice or bill . It will check the from-to, and the rights then will call the Function Name with agrv as parameters
 * generic methods defined on abstract class level
-  - get_rule_name(classname) - return an object which is representation of calculaton rule
+  - get_rule_name(classname) - return an object which is representation of calculation rule
   - get_rule_details(classname) - return the data about class and parameters
   - get_parameters(class_name, instance) - Function to obtain the required parameter and its properties for an instance of certain model. 
       This function is registered to the module signal via the ready function if the rule is active
