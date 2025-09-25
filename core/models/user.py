@@ -21,7 +21,7 @@ from django.contrib.auth.password_validation import validate_password
 from ..utils import filter_validity, CachedManager
 from .base import ExtendableModel, Language, UUIDModel
 from .versioned_model import UUIDVersionedModel, VersionedModel
-from core.utils import get_first_or_default_language, to_list_permissions
+from core.utils import to_list_permissions
 from rest_framework import exceptions
 
 logger = logging.getLogger(__name__)
@@ -133,20 +133,11 @@ class Role(VersionedModel):
     )
     name = models.CharField(db_column="RoleName", max_length=50)
     alt_language = models.CharField(
-        db_column="AltLanguage", max_length=50, blank=True, null=True
-    )
-    is_system = models.IntegerField(db_column="IsSystem")
-    is_blocked = models.BooleanField(db_column="IsBlocked")
-    audit_user_id = models.IntegerField(db_column="AuditUserID", blank=True, null=True)
-
-    def get_display_name(self, user_language=None):
-        """
-        Returns the role name in the user's language if available, otherwise falls back to the default name.
-        """
-        defaut_language = get_first_or_default_language().code
-        if user_language and self.alt_language and user_language != defaut_language:
-            return self.alt_language
-        return self.name
+        db_column='AltLanguage', max_length=50, blank=True, null=True)
+    is_system = models.IntegerField(db_column='IsSystem')
+    is_blocked = models.BooleanField(db_column='IsBlocked')
+    audit_user_id = models.IntegerField(
+        db_column='AuditUserID', blank=True, null=True)
 
     def natural_key(self):
         return (self.uuid,)
