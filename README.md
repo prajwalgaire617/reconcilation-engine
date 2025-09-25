@@ -72,7 +72,7 @@ The auto-provisioning assigns a default Group (name can be parameterized) from w
 Note: if not existing, the default group is created at startup.
 
 ### Language Support for Role Labels
-If the user has a language different from the system default and a translation is available in alt_language, the role name is returned in that language. Otherwise, it falls back to the default name. This ensures localized role labels are shown based on the user's language preferences.
+Role names are displayed in the user's selected language using Django's translation system with .po and .mo files. If a translation is available for the user's language (e.g., fr), the translated role name is shown. Otherwise, it falls back to the default role name. This ensures localized role labels are displayed based on the user's language preferences, managed through translation files rather than a database column.
 
 ### Mutations & Signals
 The OpenIMISMutation class of this module provides the template code for
