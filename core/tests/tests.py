@@ -16,7 +16,7 @@ class HelpersTest(TestCase):
     def test_login_helper(self):
         count_before = InteractiveUser.objects.count()
         login_helper = LogInHelper()
-        user = login_helper.get_or_create_user_api()
+        user = login_helper.get_or_create_user_api(username="test_login_helper")
         self.assertTrue(type(user) is User)
         count_after = InteractiveUser.objects.count()
         self.assertEquals(count_after, count_before + 1)
@@ -29,9 +29,7 @@ class GQLTest(TestCase):
                 "birthDate": "1990-10-18",
                 "clientMutationId": "6a7ff306-24d0-4b51-a383-c072e764e842",
                 "clientMutationLabel": "Update user",
-                "districts": [
-                    "20"
-                ],
+                "districts": ["20"],
                 "email": "Admin@admin.com",
                 "healthFacilityId": "6",
                 "language": "en",
@@ -39,29 +37,24 @@ class GQLTest(TestCase):
                 "locationId": None,
                 "otherNames": "Roger",
                 "phone": None,
-                "roles": [
-                    "9"
-                ],
+                "roles": ["9"],
                 "substitutionOfficerId": None,
                 "username": "VHOS0011",
-                "userTypes": [
-                    "INTERACTIVE",
-                    "CLAIM_ADMIN"
-                ],
-                "uuid": "28026414-f7dd-48fa-bedd-2f4cce9f9677"
+                "userTypes": ["INTERACTIVE", "CLAIM_ADMIN"],
+                "uuid": "28026414-f7dd-48fa-bedd-2f4cce9f9677",
             }
         }
     }
 
     def test_save(self):
 
-        _ = self.to_camel_case_key(self._DATA_MUTATION_VARS['variables']['input'])
+        _ = self.to_camel_case_key(self._DATA_MUTATION_VARS["variables"]["input"])
         # create_or_update_interactive_user(self.user,data)
         # self.user=InteractiveUser.objects.filter(uuid = '28026414-f7dd-48fa-bedd-2f4cce9f9677').first()
         # self.assertEquals(self.user.lastName, "Manal")
 
     def to_camel_case_key(self, input):
-        pattern = re.compile(r'(?<!^)(?=[A-Z]|[0-9]+)')
+        pattern = re.compile(r"(?<!^)(?=[A-Z]|[0-9]+)")
         if isinstance(input, list):
             res = []
             for elm in input:
@@ -70,7 +63,7 @@ class GQLTest(TestCase):
         elif isinstance(input, dict):
             res = {}
             for key in input:
-                res[pattern.sub('_', key).lower()] = self.to_camel_case_key(input[key])
+                res[pattern.sub("_", key).lower()] = self.to_camel_case_key(input[key])
             return res
         else:
             return input

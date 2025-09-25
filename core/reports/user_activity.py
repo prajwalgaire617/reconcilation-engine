@@ -1,12 +1,14 @@
+# flake8: noqa
 from django.apps import apps
 from django.core.exceptions import ObjectDoesNotExist
-from django.db.models import F, Q
+from django.db.models import Q
 from django.db.models.functions import Coalesce
-
+from django.utils.translation import gettext as _
 from core.models import InteractiveUser, Officer
 from payer.models import Payer
 
 # If manually pasting from reportbro and you have test data, search and replace \" with '
+
 template = """
 {
     "docElements": [
@@ -2997,12 +2999,34 @@ ENTITY_USER_DISTRICT = "UserDistrict"
 ENTITY_LOGINS = "ENTITY_LOGINS"  # Information no longer saved
 ENTITY_ICD = "ENTITY_ICD"  # Information no longer saved - no user interaction with ICDs
 ENTITY_ALL = "ENTITY_ALL"
-AVAILABLE_ENTITIES = [ENTITY_CLAIM, ENTITY_BATCH_RUN, ENTITY_CLAIM_ADMIN, ENTITY_LOCATION, ENTITY_EXTRACT,
-                      ENTITY_FAMILY, ENTITY_FEEDBACK, ENTITY_LOC_HF, ENTITY_INSUREE, ENTITY_ITEM, ENTITY_OFFICER,
-                      ENTITY_PAYER, ENTITY_PHOTO, ENTITY_PL_ITEM, ENTITY_PL_SERVICE, ENTITY_PL_ITEM_DETAILS,
-                      ENTITY_PL_SERVICE_DETAILS, ENTITY_POLICY, ENTITY_PREMIUM, ENTITY_PRODUCT, ENTITY_PRODUCT_ITEM,
-                      ENTITY_PRODUCT_SERVICE, ENTITY_RELATIVE_DISTRIBUTION, ENTITY_SERVICE, ENTITY_USER,
-                      ENTITY_USER_DISTRICT]
+AVAILABLE_ENTITIES = [
+    ENTITY_CLAIM,
+    ENTITY_BATCH_RUN,
+    ENTITY_CLAIM_ADMIN,
+    ENTITY_LOCATION,
+    ENTITY_EXTRACT,
+    ENTITY_FAMILY,
+    ENTITY_FEEDBACK,
+    ENTITY_LOC_HF,
+    ENTITY_INSUREE,
+    ENTITY_ITEM,
+    ENTITY_OFFICER,
+    ENTITY_PAYER,
+    ENTITY_PHOTO,
+    ENTITY_PL_ITEM,
+    ENTITY_PL_SERVICE,
+    ENTITY_PL_ITEM_DETAILS,
+    ENTITY_PL_SERVICE_DETAILS,
+    ENTITY_POLICY,
+    ENTITY_PREMIUM,
+    ENTITY_PRODUCT,
+    ENTITY_PRODUCT_ITEM,
+    ENTITY_PRODUCT_SERVICE,
+    ENTITY_RELATIVE_DISTRIBUTION,
+    ENTITY_SERVICE,
+    ENTITY_USER,
+    ENTITY_USER_DISTRICT,
+]
 
 # Maps an entity to its module name
 MODULE_MAPPING = {
@@ -3041,15 +3065,12 @@ EXTRACT_DIRECTIONS = {
 }
 
 # Used for the description
-LOCATION_TYPES = {
-    'R': "Region",
-    'D': "District",
-    'W': "Ward",
-    'V': "Village"
-}
+LOCATION_TYPES = {"R": "Region", "D": "District", "W": "Ward", "V": "Village"}
 
 
-def determine_action_type(element_id: int, validity_to: str, legacy_id: str, known_legacy_ids: set):
+def determine_action_type(
+    element_id: int, validity_to: str, legacy_id: str, known_legacy_ids: set
+):
     # Determines whether this is a creation, an update or a suppression
     if legacy_id:
         if legacy_id in known_legacy_ids:
@@ -3076,77 +3097,196 @@ def determine_description(entity, element):
     # Determines the description string that must be generated, based on the element's nature
     if entity == ENTITY_CLAIM:
         hf_code = element.health_facility.code
-        return f"Claim {element.code} for Health Facility {hf_code}"
+        return _("core.user_activity_report.claim") % {'code': element.code, 'hf_code': hf_code}
     if entity == ENTITY_BATCH_RUN:
         location = element.location
-        location_string = f"{location.name} ({location.code})" if location else "all regions & districts"
-        return f"Batch run for period {element.run_month}/{element.run_year} in {location_string}"
+        if location:
+            location_string = _("core.user_activity_report.location_format") % {
+                'name': location.name,
+                'code': location.code
+            }
+        else:
+            location_string = _("core.user_activity_report.all_regions_districts")
+        return _("core.user_activity_report.batch_run") % {
+            'run_month': element.run_month,
+            'run_year': element.run_year,
+            'location': location_string
+        }
     if entity == ENTITY_CLAIM_ADMIN:
-        return f"Claim admin {element.code} - {element.other_names} {element.last_name}"
+        return _("core.user_activity_report.claim_admin") % {
+            'code': element.code,
+            'other_names': element.other_names,
+            'last_name': element.last_name
+        }
     if entity == ENTITY_EXTRACT:
-        direction = EXTRACT_DIRECTIONS.get(element.direction, "Unknown")
-        return f"Extract done on {element.date} - {direction} - {element.type}"
+        direction = EXTRACT_DIRECTIONS.get(element.direction, _("core.user_activity_report.unknown"))
+        return _("core.user_activity_report.extract") % {
+            'date': element.date,
+            'direction': direction,
+            'type': element.type
+        }
     if entity == ENTITY_FAMILY:
         location = element.location
-        location_string = f"{location.name} ({location.code})" if location else "without any location"
-        return f"Family - Head number {element.head_insuree.chf_id} - {location_string}"
+        if location:
+            location_string = _("core.user_activity_report.location_format") % {
+                'name': location.name,
+                'code': location.code
+            }
+        else:
+            location_string = _("core.user_activity_report.family_no_location")
+        return _("core.user_activity_report.family") % {
+            'chf_id': element.head_insuree.chf_id,
+            'location': location_string
+        }
     if entity == ENTITY_FEEDBACK:
         officer = Officer.objects.filter(id=element.officer_id).first()
-        officer_name = f"{officer.other_names} {officer.last_name}" if officer else "unknown Officer"
-        claim_name = f"Claim {element.claim.code}" if element.claim else "unknown Claim"
-        return f"Feedback entered on {element.feedback_date} by {officer_name} for {claim_name}"
+        if officer:
+            officer_name = f"{officer.other_names} {officer.last_name}"
+        else:
+            officer_name = _("core.user_activity_report.unknown_officer")
+        if element.claim:
+            claim_name = _("core.user_activity_report.claim_prefix") % {'code': element.claim.code}
+        else:
+            claim_name = _("core.user_activity_report.unknown_claim")
+        return _("core.user_activity_report.feedback") % {
+            'feedback_date': element.feedback_date,
+            'officer_name': officer_name,
+            'claim_name': claim_name
+        }
     if entity == ENTITY_LOC_HF:
-        return f"Health Facility {element.code} - {element.name} in {element.location.name} ({element.location.code})"
+        return _("core.user_activity_report.loc_hf") % {
+            'code': element.code,
+            'name': element.name,
+            'location_name': element.location.name,
+            'location_code': element.location.code
+        }
     if entity == ENTITY_INSUREE:
-        return f"Insuree {element.chf_id} - {element.other_names} {element.last_name}"
+        return _("core.user_activity_report.insuree") % {
+            'chf_id': element.chf_id,
+            'other_names': element.other_names,
+            'last_name': element.last_name
+        }
     if entity == ENTITY_ITEM:
-        return f"Item {element.code} - {element.name}"
+        return _("core.user_activity_report.item") % {
+            'code': element.code,
+            'name': element.name
+        }
     if entity == ENTITY_OFFICER:
-        return f"Enrollment Officer {element.code} - {element.other_names} {element.last_name}"
+        return _("core.user_activity_report.officer") % {
+            'code': element.code,
+            'other_names': element.other_names,
+            'last_name': element.last_name
+        }
     if entity == ENTITY_PAYER:
         displayed_type = "Unknown"
         for payer_type in Payer.PAYER_TYPE_CHOICES:
             if payer_type[0] == element.type:
                 displayed_type = payer_type[1]
                 break
-        return f"Payer {element.name} - type {displayed_type}"
+        return _("core.user_activity_report.payer") % {
+            'name': element.name,
+            'displayed_type': displayed_type
+        }
     if entity == ENTITY_PHOTO and element.insuree:
-        return f"Insuree Picture for Insuree {element.insuree.chf_id}"
+        return _("core.user_activity_report.photo") % {'chf_id': element.insuree.chf_id}
     if entity == ENTITY_PL_ITEM:
         location = element.location
-        location_string = f"{location.name} ({location.code})" if location else "without specific location"
-        return f"Item Pricelist - {element.name} - {location_string}"
+        if location:
+            location_string = _("core.user_activity_report.location_format") % {
+                'name': location.name,
+                'code': location.code
+            }
+        else:
+            location_string = _("core.user_activity_report.pl_no_location")
+        return _("core.user_activity_report.pl_item") % {
+            'name': element.name,
+            'location': location_string
+        }
     if entity == ENTITY_PL_SERVICE:
         location = element.location
-        location_string = f"{location.name} ({location.code})" if location else "without specific location"
-        return f"Service Pricelist - {element.name} - {location_string}"
+        if location:
+            location_string = _("core.user_activity_report.location_format") % {
+                'name': location.name,
+                'code': location.code
+            }
+        else:
+            location_string = _("core.user_activity_report.pl_no_location")
+        return _("core.user_activity_report.pl_service") % {
+            'name': element.name,
+            'location': location_string
+        }
     if entity == ENTITY_PL_ITEM_DETAILS:
-        return f"Item {element.item.code} - {element.item.name} - in the Price List \"{element.items_pricelist.name}\""
+        return _("core.user_activity_report.pl_item_details") % {
+            'item_code': element.item.code,
+            'item_name': element.item.name,
+            'pricelist_name': element.items_pricelist.name
+        }
     if entity == ENTITY_PL_SERVICE_DETAILS:
-        return f"Service {element.service.code} - {element.service.name} - in the Price List \"{element.services_pricelist.name}\""
+        return _("core.user_activity_report.pl_service_details") % {
+            'service_code': element.service.code,
+            'service_name': element.service.name,
+            'pricelist_name': element.services_pricelist.name
+        }
     if entity == ENTITY_POLICY:
-        return f"Policy to Family - Head number {element.family.head_insuree.chf_id}"
+        return _("core.user_activity_report.policy") % {'chf_id': element.family.head_insuree.chf_id}
     if entity == ENTITY_PREMIUM:
-        return f"Premium of {element.amount} - Family Head {element.policy.family.head_insuree.chf_id} - Policy start on {element.policy.start_date}"
+        return _("core.user_activity_report.premium") % {
+            'amount': element.amount,
+            'chf_id': element.policy.family.head_insuree.chf_id,
+            'start_date': element.policy.start_date
+        }
     if entity == ENTITY_PRODUCT:
-        return f"Product {element.code} - {element.name}"
+        return _("core.user_activity_report.product") % {
+            'code': element.code,
+            'name': element.name
+        }
     if entity == ENTITY_PRODUCT_ITEM:
-        return f"Item {element.item.code} in Product {element.product.code}"
+        return _("core.user_activity_report.product_item") % {
+            'item_code': element.item.code,
+            'product_code': element.product.code
+        }
     if entity == ENTITY_PRODUCT_SERVICE:
-        return f"Service {element.service.code} in Product {element.product.code}"
+        return _("core.user_activity_report.product_service") % {
+            'service_code': element.service.code,
+            'product_code': element.product.code
+        }
     if entity == ENTITY_RELATIVE_DISTRIBUTION:
-        return f"Relative distribution in Product {element.product.code} - {element.product.name}"
+        return _("core.user_activity_report.relative_distribution") % {
+            'product_code': element.product.code,
+            'product_name': element.product.name
+        }
     if entity == ENTITY_SERVICE:
-        return f"Service {element.code} - {element.name}"
+        return _("core.user_activity_report.service") % {
+            'code': element.code,
+            'name': element.name
+        }
     if entity == ENTITY_USER:
-        return f"User {element.other_names} {element.last_name} - login {element.login_name}"
+        return _("core.user_activity_report.user") % {
+            'other_names': element.other_names,
+            'last_name': element.last_name,
+            'login_name': element.login_name
+        }
     if entity == ENTITY_USER_DISTRICT:
-        return f"User {element.user.login_name} assigned to District {element.location.code} {element.location.name}"
+        return _("core.user_activity_report.user_district") % {
+            'login_name': element.user.login_name,
+            'location_code': element.location.code,
+            'location_name': element.location.name
+        }
     if entity == ENTITY_LOCATION:
-        return f"{LOCATION_TYPES[element.type]} {element.code} - {element.name} "
+        location_type = LOCATION_TYPES[element.type]
+        return _("core.user_activity_report.location") % {
+            'type': location_type,
+            'code': element.code,
+            'name': element.name
+        }
     else:
         # This should not happen, but just in case
-        return f"{element.id} - {element.legacy_id} - from {element.validity_from} - to {element.validity_to}"
+        return _("core.user_activity_report.default") % {
+            'id': element.id,
+            'legacy_id': element.legacy_id,
+            'validity_from': element.validity_from,
+            'validity_to': element.validity_to
+        }
 
 
 def determine_datetime(validity_to, validity_from, action_type):
@@ -3156,15 +3296,16 @@ def determine_datetime(validity_to, validity_from, action_type):
     return validity_to if validity_to else validity_from
 
 
-def fetch_entity_data(requested_entity: str,
-                      report_params: dict,
-                      user_id: int,
-                      user_names_mapping: dict,
-                      trigger_missing_entity_error=True):
+def fetch_entity_data(
+    requested_entity: str,
+    report_params: dict,
+    user_id: int,
+    user_names_mapping: dict,
+    trigger_missing_entity_error=True,
+):
     data = []
     try:
-        manager = apps.get_model(
-            MODULE_MAPPING[requested_entity], requested_entity)
+        manager = apps.get_model(MODULE_MAPPING[requested_entity], requested_entity)
         # TODO : prepare a mapping of the list of fields that are needed for each entity -> use .only(list) ?
         filters = (
             Q(validity_to__lte=report_params["date_to"])
@@ -3176,24 +3317,32 @@ def fetch_entity_data(requested_entity: str,
         )
         if user_id != ALL_USERS:
             filters &= Q(audit_user_id=user_id)
-        elements = manager.objects.filter(filters) \
-                                  .annotate(order_date=Coalesce("validity_to", "validity_from")) \
-                                  .order_by("order_date", "-id")
+        elements = (
+            manager.objects.filter(filters)
+            .annotate(order_date=Coalesce("validity_to", "validity_from"))
+            .order_by("order_date", "-id")
+        )
 
         known_legacy_ids = set()
 
         for element in elements:
 
             action_type = determine_action_type(
-                element.id, element.validity_to, element.legacy_id, known_legacy_ids)
-            if action_type != report_params["action"] and report_params["action"] != ACTION_ALL:
+                element.id, element.validity_to, element.legacy_id, known_legacy_ids
+            )
+            if (
+                action_type != report_params["action"]
+                and report_params["action"] != ACTION_ALL
+            ):
                 continue
 
             new_data_element = {
                 "entity": requested_entity,
                 "action": action_type,
                 "description": determine_description(requested_entity, element),
-                "datetime": determine_datetime(element.validity_to, element.validity_from, action_type),
+                "datetime": determine_datetime(
+                    element.validity_to, element.validity_from, action_type
+                ),
                 "user_name": user_names_mapping.get(element.audit_user_id, "openIMIS"),
             }
             data.append(new_data_element)
@@ -3215,13 +3364,15 @@ def map_user_ids_to_user_names():
     return mapping
 
 
-def user_activity_query(user,
-                        date_start: str,
-                        date_end: str,
-                        requested_user_id: int = ALL_USERS,
-                        action: str = ACTION_ALL,
-                        entity: str = ENTITY_ALL,
-                        **kwargs):
+def user_activity_query(
+    user,
+    date_start: str,
+    date_end: str,
+    requested_user_id: int = ALL_USERS,
+    action: str = ACTION_ALL,
+    entity: str = ENTITY_ALL,
+    **kwargs,
+):
     # Checking the parameters received and returning an error if anything is wrong
     if entity != ENTITY_ALL and entity not in AVAILABLE_ENTITIES:
         return {"error": "Error - entity requested not available"}
@@ -3238,15 +3389,17 @@ def user_activity_query(user,
 
     # Preparing data for the header table
     header = {
-        "user_name": f"{user.other_names} {user.last_name}" if user_id != ALL_USERS else "All users",
+        "user_name": (
+            f"{user.other_names} {user.last_name}"
+            if user_id != ALL_USERS
+            else "All users"
+        ),
         "date_from": date_start,
         "date_to": date_end,
         "entity": entity,
         "action": action,
     }
-    report_data = {
-        "header": [header]
-    }
+    report_data = {"header": [header]}
 
     # Fetching all usernames in order to display them
     user_names_mapping = map_user_ids_to_user_names()
@@ -3254,7 +3407,8 @@ def user_activity_query(user,
     # Fetching data for a single entity
     if entity != ENTITY_ALL:
         fetch_success, entity_data = fetch_entity_data(
-            entity, header, user_id, user_names_mapping)
+            entity, header, user_id, user_names_mapping
+        )
 
         if fetch_success:
             entity_data.sort(key=lambda x: (x["user_name"], x["datetime"]))
@@ -3268,11 +3422,13 @@ def user_activity_query(user,
         # Fetching data for all available entities that are installed in the current instance
         fetched_data = []
         for current_entity in AVAILABLE_ENTITIES:
-            fetch_success, entity_data = fetch_entity_data(current_entity,
-                                                           header,
-                                                           user_id,
-                                                           user_names_mapping,
-                                                           trigger_missing_entity_error=False)
+            fetch_success, entity_data = fetch_entity_data(
+                current_entity,
+                header,
+                user_id,
+                user_names_mapping,
+                trigger_missing_entity_error=False,
+            )
             fetched_data.extend(entity_data)
 
         fetched_data.sort(key=lambda x: (x["user_name"], x["datetime"]))

@@ -3,14 +3,12 @@ from django.conf import settings
 from graphene_django.utils.testing import GraphQLTestCase
 import uuid
 import logging
-from graphene import Schema
-from graphene.test import Client
+from graphene import DateTime as graphene_DateTime
 import datetime
 import time
 from django.test import RequestFactory
 from django.middleware.csrf import get_token
 from graphql_jwt.shortcuts import get_token as get_token_jwt
-from rest_framework.request import Request as DRFRequest
 from django.contrib.auth.models import AnonymousUser
 from django.contrib.sessions.backends.db import SessionStore
 from django.core.cache import cache
@@ -18,11 +16,12 @@ from django.core.cache import cache
 
 logger = logging.getLogger(__name__)
 
+
 class BaseTestContext:
     def __init__(self, user=None, method="GET", path="/", data=None, headers=None):
         """
         Initialize a test context with realistic request attributes.
-        
+
         Args:
             user: User instance (authenticated or None for anonymous).
             method: HTTP method (e.g., "GET", "POST").
@@ -32,16 +31,18 @@ class BaseTestContext:
         """
         cookies = {}
         self.factory = RequestFactory()
-        
+
         # Initialize session
         self.session = SessionStore()
         if user is not None:
             self.user = user
             self.session.create()  # Create a new session
-            self.session['user_id'] = str(user.id)  # Store user ID or other relevant data
+            self.session["user_id"] = str(
+                user.id
+            )  # Store user ID or other relevant data
             self.session.save()  # Save session to generate session_key
             self.jwt = get_token_jwt(self.user, self)
-            cookies['JWT'] = self.jwt 
+            cookies["JWT"] = self.jwt
         else:
             self.user = AnonymousUser()
 
@@ -51,13 +52,13 @@ class BaseTestContext:
             method=self.method,
             path=path,
             data=json.dumps(data) if data else {},  # Ensure JSON data is serialized
-            content_type="application/json"
+            content_type="application/json",
         )
-        
+
         # Attach session and user to request
         self.request.session = self.session
         self.request.user = self.user
-        
+
         # Set up META dictionary
         self.META = self.request.META
         self.META["REQUEST_METHOD"] = self.method
@@ -81,9 +82,11 @@ class BaseTestContext:
                 self.META[meta_key] = value
 
         # Add cookies (e.g., session ID and JWT token)
-        cookies['sessionid'] = self.session.session_key
+        cookies["sessionid"] = self.session.session_key
         if cookies:
-            cookie_string = "; ".join(f"{key}={value}" for key, value in cookies.items())
+            cookie_string = "; ".join(
+                f"{key}={value}" for key, value in cookies.items()
+            )
             self.META["HTTP_COOKIE"] = cookie_string
 
     def update_meta(self, key, value):
@@ -97,22 +100,22 @@ class BaseTestContext:
 
     def get_jwt(self):
         """Return the JWT token."""
-        return getattr(self, 'jwt', None)
-        
-        
+        return getattr(self, "jwt", None)
+
 
 class openIMISGraphQLTestCase(GraphQLTestCase):
     GRAPHQL_URL = f"/{settings.SITE_ROOT()}graphql"
     GRAPHQL_SCHEMA = True
 
-    
     # client = None
     @classmethod
     def setUpClass(cls):
         # cls.client=Client(cls.schema)
         super(openIMISGraphQLTestCase, cls).setUpClass()
 
-    def get_mutation_result(self, mutation_uuid, token, internal=False, allow_exceptions=True):
+    def get_mutation_result(
+        self, mutation_uuid, token, internal=False, allow_exceptions=True
+    ):
         content = None
         while True:
             # wait for the mutation to be done
@@ -132,7 +135,10 @@ class openIMISGraphQLTestCase(GraphQLTestCase):
                 {{
                     node
                     {{
-                        id,status,error,{'clientMutationId,' if not internal else ''}clientMutationLabel,clientMutationDetails,requestDateTime,jsonExt
+                        id,status,error,{
+                            'clientMutationId,' if not internal
+                            else ''
+                        }clientMutationLabel,clientMutationDetails,requestDateTime,jsonExt
                     }}
                 }}
                 }}
@@ -196,31 +202,38 @@ class openIMISGraphQLTestCase(GraphQLTestCase):
         content = json.loads(response.content)
 
         if follow:
-            mutation_type = list(content['data'].keys())[0]
+            mutation_type = list(content["data"].keys())[0]
             return self.get_mutation_result(
-                content['data'][mutation_type]['internalId'],
-                token,
-                internal=True
+                content["data"][mutation_type]["internalId"], token, internal=True
             )
         else:
             return json.loads(response.content)
 
-    def send_mutation(self, mutation_type, input_params, token, follow=True, raw=False, add_client_mutation_id=False, allow_exceptions=True):
+    def send_mutation(
+        self,
+        mutation_type,
+        input_params,
+        token,
+        follow=True,
+        raw=False,
+        add_client_mutation_id=False,
+        allow_exceptions=True,
+    ):
         # copy to avoid adding clientMutationId to the calling param
         input_params = dict(input_params)
         if add_client_mutation_id and "clientMutationId" not in input_params:
             input_params["clientMutationId"] = str(uuid.uuid4())
         response = self.query(
             f"""
-        mutation 
+        mutation
         {{
             {mutation_type}(input: {{
                {input_params if raw else self.build_params(input_params)}
-            }})  
+            }})
 
           {{
             internalId
-            {'clientMutationId' if 'clientMutationId' in input_params else ''} 
+            {'clientMutationId' if 'clientMutationId' in input_params else ''}
           }}
         }}
         """,
@@ -231,7 +244,10 @@ class openIMISGraphQLTestCase(GraphQLTestCase):
         content = json.loads(response.content)
         if follow:
             return self.get_mutation_result(
-                content["data"][mutation_type]["internalId"], token, internal=True, allow_exceptions=allow_exceptions
+                content["data"][mutation_type]["internalId"],
+                token,
+                internal=True,
+                allow_exceptions=allow_exceptions,
             )
         else:
             return content
@@ -248,7 +264,7 @@ class openIMISGraphQLTestCase(GraphQLTestCase):
             if isinstance(v, bool):
                 return str(v).lower()
             if isinstance(v, datetime.date):
-                return graphene.DateTime.serialize(
+                return graphene_DateTime.serialize(
                     datetime.datetime.fromordinal(v.toordinal())
                 )
             return v
@@ -257,8 +273,7 @@ class openIMISGraphQLTestCase(GraphQLTestCase):
             f"{k}:{wrap_arg(v)}" for k, v in params.items() if v is not None
         ]
         return ", ".join(params_as_args)
+
     def tearDwon(self):
         cache.clear()
         super().tearDwon()
-
-        

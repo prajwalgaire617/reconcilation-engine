@@ -4,8 +4,13 @@ import asyncio
 from django.db import transaction
 
 from core.models import HistoryModel, MutationLog
-from core.services.utils import check_authentication as check_authentication, output_exception, \
-    model_representation, output_result_success, build_delete_instance_payload
+from core.services.utils import (
+    check_authentication as check_authentication,
+    output_exception,
+    model_representation,
+    output_result_success,
+    build_delete_instance_payload,
+)
 from core.validation.base import BaseModelValidation
 from core.utils import to_json_safe_value
 
@@ -19,7 +24,9 @@ class BaseService(ABC):
         """
         raise NotImplementedError("Class has to define OBJECT_TYPE for service.")
 
-    def __init__(self, user, validation_class: Type[BaseModelValidation] = BaseModelValidation):
+    def __init__(
+        self, user, validation_class: Type[BaseModelValidation] = BaseModelValidation
+    ):
         self.user = user
         self.validation_class = validation_class
 
@@ -32,7 +39,9 @@ class BaseService(ABC):
                 obj_ = self.OBJECT_TYPE(**obj_data)
                 return self.save_instance(obj_)
         except Exception as exc:
-            return output_exception(model_name=self.OBJECT_TYPE.__name__, method="create", exception=exc)
+            return output_exception(
+                model_name=self.OBJECT_TYPE.__name__, method="create", exception=exc
+            )
 
     @check_authentication
     def update(self, obj_data):
@@ -40,21 +49,25 @@ class BaseService(ABC):
             with transaction.atomic():
                 obj_data = self._adjust_update_payload(obj_data)
                 self.validation_class.validate_update(self.user, **obj_data)
-                obj_ = self.OBJECT_TYPE.objects.filter(id=obj_data['id']).first()
+                obj_ = self.OBJECT_TYPE.objects.filter(id=obj_data["id"]).first()
                 obj_.update(data=obj_data, user=self.user, save=False)
                 return self.save_instance(obj_)
         except Exception as exc:
-            return output_exception(model_name=self.OBJECT_TYPE.__name__, method="update", exception=exc)
+            return output_exception(
+                model_name=self.OBJECT_TYPE.__name__, method="update", exception=exc
+            )
 
     @check_authentication
     def delete(self, obj_data):
         try:
             with transaction.atomic():
                 self.validation_class.validate_delete(self.user, **obj_data)
-                obj_ = self.OBJECT_TYPE.objects.filter(id=obj_data['id']).first()
+                obj_ = self.OBJECT_TYPE.objects.filter(id=obj_data["id"]).first()
                 return self.delete_instance(obj_)
         except Exception as exc:
-            return output_exception(model_name=self.OBJECT_TYPE.__name__, method="delete", exception=exc)
+            return output_exception(
+                model_name=self.OBJECT_TYPE.__name__, method="delete", exception=exc
+            )
 
     def save_instance(self, obj_):
         obj_.save(user=self.user, username=self.user.username)
@@ -73,7 +86,7 @@ class BaseService(ABC):
         return self._base_payload_adjust(payload_data)
 
     def _align_json_ext(self, payload_data):
-        json_ext = payload_data.get('json_ext')
+        json_ext = payload_data.get("json_ext")
         if isinstance(json_ext, dict):
             for key, value in payload_data.items():
                 if key in json_ext and json_ext[key] != value:
@@ -84,13 +97,11 @@ class BaseService(ABC):
 
 
 def wait_for_mutation(client_mutation_id):
-    mutation = MutationLog.objects.filter(
-        client_mutation_id=client_mutation_id
-    ).first()
+    mutation = MutationLog.objects.filter(client_mutation_id=client_mutation_id).first()
     if not mutation:
         return
     loop_count = 0
-    while mutation.status == MutationLog.RECEIVED and loop_count<10:
+    while mutation.status == MutationLog.RECEIVED and loop_count < 10:
         asyncio.sleep(0.3)
         loop_count += 1
     return

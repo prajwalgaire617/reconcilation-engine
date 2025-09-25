@@ -135,6 +135,112 @@ msgstr ""
 msgid "Only user requesting export can fetch request"
 msgstr ""
 
+
+# django.po
+msgid "core.user_activity_report.claim"
+msgstr "Claim %(code)s for Health Facility %(hf_code)s"
+
+msgid "core.user_activity_report.batch_run"
+msgstr "Batch run for period %(run_month)s/%(run_year)s in %(location)s"
+
+msgid "core.user_activity_report.location_format"
+msgstr "%(name)s (%(code)s)"
+
+msgid "core.user_activity_report.all_regions_districts"
+msgstr "all regions & districts"
+
+msgid "core.user_activity_report.claim_admin"
+msgstr "Claim admin %(code)s - %(other_names)s %(last_name)s"
+
+msgid "core.user_activity_report.extract"
+msgstr "Extract done on %(date)s - %(direction)s - %(type)s"
+
+msgid "core.user_activity_report.unknown"
+msgstr "Unknown"
+
+msgid "core.user_activity_report.family"
+msgstr "Family - Head number %(chf_id)s - %(location)s"
+
+msgid "core.user_activity_report.family_no_location"
+msgstr "without any location"
+
+msgid "core.user_activity_report.feedback"
+msgstr "Feedback entered on %(feedback_date)s by %(officer_name)s for %(claim_name)s"
+
+msgid "core.user_activity_report.unknown_officer"
+msgstr "unknown Officer"
+
+msgid "core.user_activity_report.claim_prefix"
+msgstr "Claim %(code)s"
+
+msgid "core.user_activity_report.unknown_claim"
+msgstr "unknown Claim"
+
+msgid "core.user_activity_report.loc_hf"
+msgstr "Health Facility %(code)s - %(name)s in %(location_name)s (%(location_code)s)"
+
+msgid "core.user_activity_report.insuree"
+msgstr "Insuree %(chf_id)s - %(other_names)s %(last_name)s"
+
+msgid "core.user_activity_report.item"
+msgstr "Item %(code)s - %(name)s"
+
+msgid "core.user_activity_report.officer"
+msgstr "Enrollment Officer %(code)s - %(other_names)s %(last_name)s"
+
+msgid "core.user_activity_report.payer"
+msgstr "Payer %(name)s - type %(displayed_type)s"
+
+msgid "core.user_activity_report.photo"
+msgstr "Insuree Picture for Insuree %(chf_id)s"
+
+msgid "core.user_activity_report.pl_item"
+msgstr "Item Pricelist - %(name)s - %(location)s"
+
+msgid "core.user_activity_report.pl_service"
+msgstr "Service Pricelist - %(name)s - %(location)s"
+
+msgid "core.user_activity_report.pl_no_location"
+msgstr "without specific location"
+
+msgid "core.user_activity_report.pl_item_details"
+msgstr "Item %(item_code)s - %(item_name)s - in the Price List \"%(pricelist_name)s\""
+
+msgid "core.user_activity_report.pl_service_details"
+msgstr "Service %(service_code)s - %(service_name)s - in the Price List \"%(pricelist_name)s\""
+
+msgid "core.user_activity_report.policy"
+msgstr "Policy to Family - Head number %(chf_id)s"
+
+msgid "core.user_activity_report.premium"
+msgstr "Premium of %(amount)s - Family Head %(chf_id)s - Policy start on %(start_date)s"
+
+msgid "core.user_activity_report.product"
+msgstr "Product %(code)s - %(name)s"
+
+msgid "core.user_activity_report.product_item"
+msgstr "Item %(item_code)s in Product %(product_code)s"
+
+msgid "core.user_activity_report.product_service"
+msgstr "Service %(service_code)s in Product %(product_code)s"
+
+msgid "core.user_activity_report.relative_distribution"
+msgstr "Relative distribution in Product %(product_code)s - %(product_name)s"
+
+msgid "core.user_activity_report.service"
+msgstr "Service %(code)s - %(name)s"
+
+msgid "core.user_activity_report.user"
+msgstr "User %(other_names)s %(last_name)s - login %(login_name)s"
+
+msgid "core.user_activity_report.user_district"
+msgstr "User %(login_name)s assigned to District %(location_code)s %(location_name)s"
+
+msgid "core.user_activity_report.location"
+msgstr "%(type)s %(code)s - %(name)s"
+
+msgid "core.user_activity_report.default"
+msgstr "%(id)s - %(legacy_id)s - from %(validity_from)s - to %(validity_to)s"
 msgid "Enrolment Officer"
 msgstr "Enrolment Officer"
 

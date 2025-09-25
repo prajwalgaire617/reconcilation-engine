@@ -1,9 +1,12 @@
+# flake8: noqa
 from core.models.base import *
 from core.models import versioned_model
 from core.models import user
 from core.models import history_model
 from core.models import base_mutation
 from core.models import user_mutation
+from core.utils import filter_validity
+
 
 _query_export_path = user._query_export_path
 _get_default_expire_date = user._get_default_expire_date
