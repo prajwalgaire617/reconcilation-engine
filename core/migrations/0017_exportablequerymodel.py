@@ -11,22 +11,49 @@ import django.db.models.deletion
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('core', '0016_add_last_login_on_interactive_user'),
+        ("core", "0016_add_last_login_on_interactive_user"),
     ]
 
     operations = [
         migrations.CreateModel(
-            name='ExportableQueryModel',
+            name="ExportableQueryModel",
             fields=[
-                ('id', models.AutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('name', models.CharField(max_length=255)),
-                ('model', models.CharField(max_length=255)),
-                ('content', models.FileField(upload_to=core.models._query_export_path)),
-                ('sql_query', models.TextField()),
-                ('create_date', core.fields.DateTimeField(db_column='DateCreated', default=datetime.datetime.now)),
-                ('expire_date', core.fields.DateTimeField(db_column='DateExpiring', default=core.models._get_default_expire_date)),
-                ('is_deleted', models.BooleanField(default=False)),
-                ('user', models.ForeignKey(db_column='User', on_delete=django.db.models.deletion.DO_NOTHING, related_name='data_exports', to=settings.AUTH_USER_MODEL)),
+                (
+                    "id",
+                    models.AutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                ("name", models.CharField(max_length=255)),
+                ("model", models.CharField(max_length=255)),
+                ("content", models.FileField(upload_to=core.models._query_export_path)),
+                ("sql_query", models.TextField()),
+                (
+                    "create_date",
+                    core.fields.DateTimeField(
+                        db_column="DateCreated", default=datetime.datetime.now
+                    ),
+                ),
+                (
+                    "expire_date",
+                    core.fields.DateTimeField(
+                        db_column="DateExpiring",
+                        default=core.models._get_default_expire_date,
+                    ),
+                ),
+                ("is_deleted", models.BooleanField(default=False)),
+                (
+                    "user",
+                    models.ForeignKey(
+                        db_column="User",
+                        on_delete=django.db.models.deletion.DO_NOTHING,
+                        related_name="data_exports",
+                        to=settings.AUTH_USER_MODEL,
+                    ),
+                ),
             ],
         ),
     ]

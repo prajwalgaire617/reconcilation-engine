@@ -4,11 +4,7 @@ from datetime import datetime as py_datetime
 
 from django.db import models
 
-from core.utils import (
-    CachedManager,
-    CachedModelMixin
-    
-)
+from core.utils import CachedManager, CachedModelMixin
 from ..fields import DateTimeField
 from ..utils import filter_validity
 import logging
@@ -16,10 +12,9 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-
 class BaseVersionedModel(CachedModelMixin, models.Model):
-    validity_from = DateTimeField(db_column='ValidityFrom', default=py_datetime.now)
-    validity_to = DateTimeField(db_column='ValidityTo', blank=True, null=True)
+    validity_from = DateTimeField(db_column="ValidityFrom", default=py_datetime.now)
+    validity_to = DateTimeField(db_column="ValidityTo", blank=True, null=True)
 
     # Use our custom CachedManager for object retrieval
     objects = CachedManager()
@@ -28,7 +23,7 @@ class BaseVersionedModel(CachedModelMixin, models.Model):
         """
         Overrides the default update to update the cache after saving the instance.
         """
-        obj_data = kwargs.pop('data', {})
+        obj_data = kwargs.pop("data", {})
         if not obj_data:
             obj_data = kwargs
             kwargs = {}
@@ -39,7 +34,7 @@ class BaseVersionedModel(CachedModelMixin, models.Model):
         """
         Overrides the default save to update the cache after saving the instance.
         """
-        caching = kwargs.pop('cache_update', True)
+        caching = kwargs.pop("cache_update", True)
         super().save(*args, **kwargs)
         if caching:
             # Build the cache key using the same logic as in the CachedManager.
@@ -88,23 +83,15 @@ class BaseVersionedModel(CachedModelMixin, models.Model):
         return queryset
 
 
-
-
 class VersionedModel(BaseVersionedModel):
-    legacy_id = models.IntegerField(
-        db_column='LegacyID', blank=True, null=True)
-
-
+    legacy_id = models.IntegerField(db_column="LegacyID", blank=True, null=True)
 
     class Meta:
         abstract = True
 
 
 class UUIDVersionedModel(BaseVersionedModel):
-    legacy_id = models.UUIDField(
-        db_column='LegacyID', blank=True, null=True)
+    legacy_id = models.UUIDField(db_column="LegacyID", blank=True, null=True)
 
     class Meta:
         abstract = True
-
-

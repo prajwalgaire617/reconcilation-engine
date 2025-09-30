@@ -11,7 +11,9 @@ from django.utils.http import urlencode
 from django.core.cache import cache
 from core.apps import CoreConfig
 from core.models.user import User, InteractiveUser, Officer, UserRole, UserManager
-from core.validation.obligatoryFieldValidation import validate_payload_for_obligatory_fields
+from core.validation.obligatoryFieldValidation import (
+    validate_payload_for_obligatory_fields,
+)
 from django.contrib.auth import authenticate
 from rest_framework import exceptions
 from core.utils import filter_validity
@@ -35,13 +37,14 @@ def create_or_update_interactive_user(user_id, data, audit_user_id, connected):
     data_subset["is_associated"] = connected
     if user_id:
         # TODO we might want to update a user that has been deleted. Use Legacy ID ?
-        i_user = InteractiveUser.objects.filter(validity_to__isnull=True, user__id=user_id).first()
+        i_user = InteractiveUser.objects.filter(
+            validity_to__isnull=True, user__id=user_id
+        ).first()
         if i_user.validity_to is not None and i_user.validity_to:
-            raise ValidationError(_('core.user.edit_historical_data_error'))
+            raise ValidationError(_("core.user.edit_historical_data_error"))
     else:
         i_user = InteractiveUser.objects.filter(
-            validity_to__isnull=True,
-            login_name=data_subset["login_name"]
+            validity_to__isnull=True, login_name=data_subset["login_name"]
         ).first()
     if i_user:
         i_user.save_history()
@@ -64,7 +67,7 @@ def create_or_update_interactive_user(user_id, data, audit_user_id, connected):
         create_or_update_user_districts(
             i_user, data["districts"], data_subset["audit_user_id"]
         )
-    cache.delete('cs_InteractiveUserSerializer_' + str(i_user.id))
+    cache.delete("cs_InteractiveUserSerializer_" + str(i_user.id))
     return i_user, created
 
 
@@ -79,9 +82,10 @@ def create_or_update_user_roles(i_user, role_ids, audit_user_id):
         UserRole.objects.create(
             user=i_user, role_id=role_id, audit_user_id=audit_user_id
         )
-    cache.delete('rights_' + str(i_user.id))
-    cache.delete('is_admin_' + str(i_user.id))
-    cache.delete('cs_InteractiveUserSerializer_' + str(i_user.id))
+    cache.delete("rights_" + str(i_user.id))
+    cache.delete("is_admin_" + str(i_user.id))
+    cache.delete("cs_InteractiveUserSerializer_" + str(i_user.id))
+
 
 # TODO move to location module ?
 def create_or_update_user_districts(i_user, district_ids, audit_user_id):
@@ -99,7 +103,7 @@ def create_or_update_user_districts(i_user, district_ids, audit_user_id):
             location_id=district_id,
             defaults={"validity_to": None, "audit_user_id": audit_user_id},
         )
-    cache.delete('q_allowed_locations_' + str(i_user.id))
+    cache.delete("q_allowed_locations_" + str(i_user.id))
 
 
 def create_or_update_officer_villages(officer, village_ids, audit_user_id):
@@ -119,7 +123,7 @@ def create_or_update_officer_villages(officer, village_ids, audit_user_id):
         )
 
 
-@validate_payload_for_obligatory_fields(CoreConfig.fields_controls_eo, 'data')
+@validate_payload_for_obligatory_fields(CoreConfig.fields_controls_eo, "data")
 def create_or_update_officer(user_id, data, audit_user_id, connected):
     officer_fields = {
         "username": "code",
@@ -144,7 +148,7 @@ def create_or_update_officer(user_id, data, audit_user_id, connected):
             validity_to__isnull=True, user__id=user_id
         ).first()
         if officer is not None and officer.validity_to is not None:
-            raise ValidationError(_('core.user.edit_historical_data_error'))
+            raise ValidationError(_("core.user.edit_historical_data_error"))
     else:
         officer = Officer.objects.filter(
             code=data_subset["code"], validity_to__isnull=True
@@ -184,11 +188,15 @@ def create_or_update_claim_admin(user_id, data, audit_user_id, connected):
     claim_admin_class = apps.get_model("core", "ClaimAdmin")
     if user_id:
         # TODO we might want to update a user that has been deleted. Use Legacy ID ?
-        claim_admin = claim_admin_class.objects.filter(validity_to__isnull=True, user__id=user_id).first()
+        claim_admin = claim_admin_class.objects.filter(
+            validity_to__isnull=True, user__id=user_id
+        ).first()
         if claim_admin is not None and claim_admin.validity_to is not None:
-            raise ValidationError(_('core.user.edit_historical_data_error'))
+            raise ValidationError(_("core.user.edit_historical_data_error"))
     else:
-        claim_admin = claim_admin_class.objects.filter(code=data_subset["code"], validity_to__isnull=True).first()
+        claim_admin = claim_admin_class.objects.filter(
+            code=data_subset["code"], validity_to__isnull=True
+        ).first()
 
     if claim_admin:
         claim_admin.save_history()
@@ -203,7 +211,9 @@ def create_or_update_claim_admin(user_id, data, audit_user_id, connected):
     return claim_admin, created
 
 
-def create_or_update_core_user(user_uuid, username, i_user=None, t_user=None, officer=None, claim_admin=None):
+def create_or_update_core_user(
+    user_uuid, username, i_user=None, t_user=None, officer=None, claim_admin=None
+):
     if user_uuid:
         # This intentionally fails if the provided uuid doesn't exist as we don't want clients to set it
         user = User.objects.get(id=user_uuid)
@@ -239,15 +249,22 @@ def create_or_update_core_user(user_uuid, username, i_user=None, t_user=None, of
     return user, created
 
 
-def change_user_password(logged_user, username_to_update=None, old_password=None, new_password=None):
+def change_user_password(
+    logged_user, username_to_update=None, old_password=None, new_password=None
+):
     if username_to_update and username_to_update != logged_user.username:
         if not logged_user.has_perms(CoreConfig.gql_mutation_update_users_perms):
             raise PermissionDenied("unauthorized")
         user_to_update = User.objects.get(username=username_to_update)
     else:
         user_to_update = logged_user
-        old_password_match = old_password and user_to_update.check_password(old_password)
-        if not (old_password_match or user_to_update.stored_password == CoreConfig.locked_user_password_hash):
+        old_password_match = old_password and user_to_update.check_password(
+            old_password
+        )
+        if not (
+            old_password_match
+            or user_to_update.stored_password == CoreConfig.locked_user_password_hash
+        ):
             raise ValidationError(_("core.wrong_old_password"))
 
     user_to_update.set_password(new_password)
@@ -268,13 +285,13 @@ def user_authentication(request, username, password):
     if not username or not password:
         raise exceptions.ParseError(_("Missing username or password"))
     try:
-        if hasattr(request, 'COOKIES') and isinstance(request.COOKIES, dict):
-            request.COOKIES.pop('JWT', None)
-            request.COOKIES.pop('JWT-refresh-token', None)
+        if hasattr(request, "COOKIES") and isinstance(request.COOKIES, dict):
+            request.COOKIES.pop("JWT", None)
+            request.COOKIES.pop("JWT-refresh-token", None)
         user = authenticate(request, username=username, password=password)
     except Exception as exc:
         logger.debug(f"Authentication failed for username: {username}:{exc}")
-        
+
     if not user and not User.objects.filter(username__iexact=username).exists():
         user, provisioned = UserManager().auto_provision_user(username=username)
         if provisioned:
@@ -288,21 +305,23 @@ def user_authentication(request, username, password):
 
 
 def check_user_unique_email(user_email):
-    if InteractiveUser.objects.filter(email=user_email, validity_to__isnull=True).exists():
+    if InteractiveUser.objects.filter(
+        email=user_email, validity_to__isnull=True
+    ).exists():
         return [{"message": "User email %s already exists" % user_email}]
     return []
 
 
 def reset_user_password(request, username):
     user = User.objects.filter(
-        Q(username=username) | Q(i_user__email=username), 
+        Q(username=username) | Q(i_user__email=username),
         *filter_validity(),
-        *filter_validity(prefix='i_user__')
+        *filter_validity(prefix="i_user__"),
     ).first()
     # we don't want to inform is a username was not found
     if not user:
         return None
-     
+
     user.clear_refresh_tokens()
 
     if not user.email:

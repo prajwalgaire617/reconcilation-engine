@@ -10,39 +10,72 @@ import uuid
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('core', '0011_auto_20210324_1528'),
+        ("core", "0011_auto_20210324_1528"),
     ]
     from django.apps import apps
+
     try:
-        ClaimAdmin = apps.get_model('claim', 'ClaimAdmin')
-    except:
+        ClaimAdmin = apps.get_model("claim", "ClaimAdmin")
+    except Exception:
         ClaimAdmin = None
-        
+
     if ClaimAdmin:
-        dependencies.append(('claim', '0012_item_service_jsonExtField'))
-        
+        dependencies.append(("claim", "0012_item_service_jsonExtField"))
+
     operations = [
         migrations.AddField(
-            model_name='user',
-            name='claim_admin',
-            #TOREVERT
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.CASCADE, to='claim.ClaimAdmin' if ClaimAdmin else 'core.ClaimAdmin'),
+            model_name="user",
+            name="claim_admin",
+            # TOREVERT
+            field=models.ForeignKey(
+                blank=True,
+                null=True,
+                on_delete=django.db.models.deletion.CASCADE,
+                to="claim.ClaimAdmin" if ClaimAdmin else "core.ClaimAdmin",
+            ),
         ),
         migrations.AddField(
-            model_name='user',
-            name='officer',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.CASCADE, to='core.Officer'),
+            model_name="user",
+            name="officer",
+            field=models.ForeignKey(
+                blank=True,
+                null=True,
+                on_delete=django.db.models.deletion.CASCADE,
+                to="core.Officer",
+            ),
         ),
         migrations.CreateModel(
-            name='UserMutation',
+            name="UserMutation",
             fields=[
-                ('id', models.UUIDField(default=uuid.uuid4, editable=False, primary_key=True, serialize=False)),
-                ('mutation', models.ForeignKey(on_delete=django.db.models.deletion.DO_NOTHING, related_name='users', to='core.MutationLog')),
-                ('user', models.ForeignKey(on_delete=django.db.models.deletion.DO_NOTHING, related_name='mutations', to=settings.AUTH_USER_MODEL)),
+                (
+                    "id",
+                    models.UUIDField(
+                        default=uuid.uuid4,
+                        editable=False,
+                        primary_key=True,
+                        serialize=False,
+                    ),
+                ),
+                (
+                    "mutation",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.DO_NOTHING,
+                        related_name="users",
+                        to="core.MutationLog",
+                    ),
+                ),
+                (
+                    "user",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.DO_NOTHING,
+                        related_name="mutations",
+                        to=settings.AUTH_USER_MODEL,
+                    ),
+                ),
             ],
             options={
-                'db_table': 'core_UserMutation',
-                'managed': True,
+                "db_table": "core_UserMutation",
+                "managed": True,
             },
             bases=(models.Model, core.models.ObjectMutation),
         ),

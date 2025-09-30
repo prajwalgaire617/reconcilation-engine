@@ -8,20 +8,35 @@ import uuid
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('core', '0005_group_usergroup'),
+        ("core", "0005_group_usergroup"),
     ]
 
     operations = [
         migrations.CreateModel(
-            name='FieldControl',
+            name="FieldControl",
             fields=[
-                ('id', models.UUIDField(default=uuid.uuid4, editable=False, primary_key=True, serialize=False)),
-                ('field', models.CharField(max_length=250, unique=True)),
-                ('usage', models.IntegerField(blank=True, max_length=1, null=True)),
-                ('module', models.ForeignKey(on_delete=django.db.models.deletion.DO_NOTHING, related_name='controls', to='core.ModuleConfiguration')),
+                (
+                    "id",
+                    models.UUIDField(
+                        default=uuid.uuid4,
+                        editable=False,
+                        primary_key=True,
+                        serialize=False,
+                    ),
+                ),
+                ("field", models.CharField(max_length=250, unique=True)),
+                ("usage", models.IntegerField(blank=True, max_length=1, null=True)),
+                (
+                    "module",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.DO_NOTHING,
+                        related_name="controls",
+                        to="core.ModuleConfiguration",
+                    ),
+                ),
             ],
             options={
-                'db_table': 'core_FieldControl',
+                "db_table": "core_FieldControl",
             },
         ),
     ]

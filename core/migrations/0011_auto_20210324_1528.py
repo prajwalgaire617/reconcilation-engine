@@ -7,25 +7,43 @@ import uuid
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('core', '0010_rolemutation'),
+        ("core", "0010_rolemutation"),
     ]
 
     operations = [
-        migrations.DeleteModel(
-            name='RoleMutation'
-        ),
+        migrations.DeleteModel(name="RoleMutation"),
         migrations.CreateModel(
-            name='RoleMutation',
+            name="RoleMutation",
             fields=[
-                ('id', models.UUIDField(default=uuid.uuid4, editable=False, primary_key=True, serialize=False),),
-                ('mutation', models.ForeignKey(on_delete=django.db.models.deletion.DO_NOTHING, related_name='roles',
-                                               to='core.MutationLog')),
-                ('role', models.ForeignKey(on_delete=django.db.models.deletion.DO_NOTHING, related_name='mutations',
-                                           to='core.Role')),
+                (
+                    "id",
+                    models.UUIDField(
+                        default=uuid.uuid4,
+                        editable=False,
+                        primary_key=True,
+                        serialize=False,
+                    ),
+                ),
+                (
+                    "mutation",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.DO_NOTHING,
+                        related_name="roles",
+                        to="core.MutationLog",
+                    ),
+                ),
+                (
+                    "role",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.DO_NOTHING,
+                        related_name="mutations",
+                        to="core.Role",
+                    ),
+                ),
             ],
             options={
-                'db_table': 'core_RoleMutation',
-                'managed': True,
+                "db_table": "core_RoleMutation",
+                "managed": True,
             },
         ),
     ]

@@ -1,6 +1,7 @@
 import logging
 
 from apscheduler.schedulers.background import BackgroundScheduler
+
 # from apscheduler.executors.pool import ProcessPoolExecutor, ThreadPoolExecutor
 from core import get_scheduler_method_ref
 from django_apscheduler.jobstores import register_events  # , register_job
@@ -24,7 +25,9 @@ def schedule_tasks(task_scheduler):
         for job in settings.SCHEDULER_JOBS:
             logger.debug("Scheduling job %s", job["method"])
             method = get_scheduler_method_ref(job["method"])
-            task_scheduler.add_job(*([method] + job.get("args", [])), **(job.get("kwargs", {})))
+            task_scheduler.add_job(
+                *([method] + job.get("args", [])), **(job.get("kwargs", {}))
+            )
 
     if settings.SCHEDULER_CUSTOM:
         for job in settings.SCHEDULER_CUSTOM:
@@ -37,7 +40,7 @@ def start():
     if settings.DEBUG:
         # Hook into the apscheduler logger
         logging.basicConfig()
-        logging.getLogger('apscheduler').setLevel(logging.DEBUG)
+        logging.getLogger("apscheduler").setLevel(logging.DEBUG)
 
     schedule_tasks(scheduler)
 

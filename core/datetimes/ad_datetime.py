@@ -15,6 +15,7 @@ core = sys.modules["core"]
 tzinfo = py_datetime.tzinfo
 timezone = py_datetime.timezone
 
+
 @total_ordering
 class AdDate(py_datetime.date):
 
@@ -80,7 +81,7 @@ class AdDate(py_datetime.date):
         if L[-1] == 0:
             del L[-1]
         return "%s.date(%s)" % (self.__class__.__module__, ", ".join(map(str, L)))
-    
+
     def _date_operation(self, operation, other):
 
         if not other:
@@ -100,10 +101,11 @@ class AdDate(py_datetime.date):
     def __lt__(self, other):
         return self._date_operation(super(AdDate, self).__lt__, other)
 
-    
+
 date = AdDate
 date.min = AdDate(1, 1, 1)
 date.max = AdDate(9999, 12, 31)
+
 
 @total_ordering
 class AdDatetime(py_datetime.datetime):
@@ -125,9 +127,16 @@ class AdDatetime(py_datetime.datetime):
     def from_ad_datetime(cls, value):
         if value is None:
             return None
-        return AdDatetime(value.year, value.month, value.day,
-                          value.hour, value.minute, value.second, value.microsecond,
-                          value.tzinfo)
+        return AdDatetime(
+            value.year,
+            value.month,
+            value.day,
+            value.hour,
+            value.minute,
+            value.second,
+            value.microsecond,
+            value.tzinfo,
+        )
 
     def __hash__(self):
         return super().__hash__()
@@ -173,14 +182,20 @@ class AdDatetime(py_datetime.datetime):
         return AdDatetime._convert_op_res(dt)
 
     def __repr__(self):
-        L = [self.year, self.month, self.day,
-             self.hour, self.minute, self.second, self.microsecond]
+        L = [
+            self.year,
+            self.month,
+            self.day,
+            self.hour,
+            self.minute,
+            self.second,
+            self.microsecond,
+        ]
         if L[-1] == 0:
             del L[-1]
         if L[-1] == 0:
             del L[-1]
-        s = "%s.datetime(%s)" % (self.__class__.__module__,
-                                 ", ".join(map(str, L)))
+        s = "%s.datetime(%s)" % (self.__class__.__module__, ", ".join(map(str, L)))
         if self.tzinfo is not None:
             assert s[-1:] == ")"
             s = s[:-1] + ", tzinfo=%r" % self.tzinfo + ")"
