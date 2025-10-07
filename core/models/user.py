@@ -277,7 +277,7 @@ class InteractiveUser(VersionedModel):
             rights = to_list_permissions()
         else:
             rights = [
-                rr.right_id
+                int(rr.right_id)
                 for rr in RoleRight.filter_queryset()
                 .filter(
                     role_id__in=[

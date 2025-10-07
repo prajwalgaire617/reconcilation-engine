@@ -95,11 +95,11 @@ class UtilsTestCase(TestCase):
             "admin should always get all permissions regardless of their RoleRight stored in DB"
         )
     CORE_PERMS = [
-        '121701', '121702', '121703', '121704',
-        '122001', '122002', '122003', '122006', '122005', '122004',
-        '121501', '121502', '121503', '121504',
-        '121601', '121602', '121603', '121604',
-        '900101'
+        121701, 121702, 121703, 121704,
+        122001, 122002, 122003, 122006, 122005, 122004,
+        121501, 121502, 121503, 121504,
+        121601, 121602, 121603, 121604,
+        900101, 122000
     ]
 
     def test_collect_all_gql_permissions(self):
@@ -109,13 +109,13 @@ class UtilsTestCase(TestCase):
         all_core_perm = []
         for core_perms in perms['core'].values():
             for core_perm in core_perms:
-                all_core_perm.append(core_perm)
+                all_core_perm.append(int(core_perm))
         self.assertEqual(sorted(all_core_perm), sorted(self.CORE_PERMS), "Missmatch for the expected core perms")
 
     def test_to_list_permissions(self):
         perm_list = to_list_permissions()
         for perm in self.CORE_PERMS:
-            self.assertTrue(perm in perm_list, f"This perm {perm} from core is not return ")
+            self.assertTrue(str(perm) in perm_list, f"This perm {perm} from core is not return ")
 
     def test_cache_invalidation(self):
         User.USE_CACHE = True
