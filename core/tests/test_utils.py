@@ -115,7 +115,7 @@ class UtilsTestCase(TestCase):
     def test_to_list_permissions(self):
         perm_list = to_list_permissions()
         for perm in self.CORE_PERMS:
-            self.assertTrue(str(perm) in perm_list, f"This perm {perm} from core is not return ")
+            self.assertTrue((perm) in perm_list, f"This perm {perm} from core is not return ")
 
     def test_cache_invalidation(self):
         User.USE_CACHE = True
