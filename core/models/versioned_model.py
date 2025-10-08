@@ -19,6 +19,10 @@ class BaseVersionedModel(CachedModelMixin, models.Model):
     # Use our custom CachedManager for object retrieval
     objects = CachedManager()
 
+    @staticmethod
+    def filter_validity(validity=None, prefix="", **kwargs):
+        return filter_validity(validity, prefix, **kwargs)
+
     def update(self, *args, **kwargs):
         """
         Overrides the default update to update the cache after saving the instance.

@@ -32,6 +32,7 @@ DEFAULT_CFG = {
     "currency": "$",
     "gql_query_claim_admins_perms": [],
     "gql_query_users_perms": ["121701"],
+    "gql_query_users_profile_perms": ["122000"],
     "gql_mutation_create_users_perms": ["121702"],
     "gql_mutation_update_users_perms": ["121703"],
     "gql_mutation_delete_users_perms": ["121704"],

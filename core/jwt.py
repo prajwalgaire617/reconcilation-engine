@@ -56,8 +56,10 @@ def jwt_decode_user_key(token, context=None):
     if not_validated and not_validated.get("username"):
         user_class = apps.get_model("core", "User")
         db_user = (
-            user_class.objects.filter(username=not_validated.get("username"))
-            .only("i_user__private_key")
+            user_class.objects.filter(
+                username=not_validated.get("username"),
+                *user_class.filter_validity()
+            ).only("i_user__private_key")
             .first()
         )
         if db_user and db_user.i_user and db_user.i_user.private_key:
@@ -103,7 +105,10 @@ def extract_private_key_from_payload(payload):
     # Get user private key from payload. This covers the refresh token mutation
 
     if "username" in payload:
-        user = InteractiveUser.objects.get(login_name=payload["username"])
+        user = InteractiveUser.objects.get(
+            login_name=payload["username"],
+            *InteractiveUser.filter_validity()
+        )
         if user:
             return user.private_key
 
