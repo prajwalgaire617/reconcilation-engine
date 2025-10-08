@@ -59,8 +59,7 @@ def jwt_decode_user_key(token, context=None):
             user_class.objects.filter(
                 username=not_validated.get("username"),
                 *user_class.filter_validity()
-                                      )
-            .only("i_user__private_key")
+            ).only("i_user__private_key")
             .first()
         )
         if db_user and db_user.i_user and db_user.i_user.private_key:
