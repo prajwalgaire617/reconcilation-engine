@@ -922,5 +922,6 @@ def to_list_permissions():
     all_perms = set()
     for app_perms in permissions_dict.values():
         for perm_ids in app_perms.values():
-            all_perms.update(perm_ids)
+            for perm_id in perm_ids:
+                all_perms.add(int(perm_id))
     return sorted(list(all_perms))
