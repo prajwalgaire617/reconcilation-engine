@@ -21,7 +21,7 @@ class BaseVersionedModel(CachedModelMixin, models.Model):
 
     @staticmethod
     def filter_validity(validity=None, prefix="", **kwargs):
-        return filter_validity(validity, prefix, **kwargs)
+        return filter_validity(validity=validity, prefix=prefix, **kwargs)
 
     def update(self, *args, **kwargs):
         """

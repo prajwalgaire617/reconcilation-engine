@@ -202,3 +202,22 @@ class gqlTest(openIMISGraphQLTestCase):
             query, headers={"HTTP_AUTHORIZATION": f"Bearer {self.admin_token}"}
         )
         self.assertResponseNoErrors(response)
+
+    def test_authority_picker(self):
+        query = """
+            query AuthorityPicker {
+                modulesPermissions  {
+                    modulePermsList {
+                        moduleName
+                        permissions {
+                            permsName
+                            permsValue
+                        }
+                    }
+                }
+            }
+        """
+        response = self.query(
+            query, headers={"HTTP_AUTHORIZATION": f"Bearer {self.admin_token}"}
+        )
+        self.assertResponseNoErrors(response)
