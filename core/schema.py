@@ -1312,7 +1312,7 @@ class Query(graphene.ObjectType):
                     ModulePermissionGQLType(module_name=app, permissions=permissions)
                 )
 
-        return ModulePermissionsListGQLType(permissions=config)
+        return ModulePermissionsListGQLType(module_perms_list=config)
 
     def resolve_custom_filters(self, info, **kwargs):
         user = info.context.user

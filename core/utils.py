@@ -239,7 +239,7 @@ class CachedManager(models.Manager):
                     "Cache hit for get() with key: %s",
                     get_cache_key(self.model, self._normalize_value(value)),
                 )
-                return cached_qs.first()  # Use first() to get single instance
+                return list(cached_qs)[0]  # Use first() to get single instance
 
         # Fallback to default get() for non-simple queries or cache miss
         instance = super().get(*args, **kwargs)
