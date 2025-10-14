@@ -44,7 +44,7 @@ from django.db import IntegrityError, transaction
 from django.db.models import Q, Count
 from django.db.models.expressions import RawSQL
 from django.http import HttpRequest
-from django.middleware.csrf import CsrfViewMiddleware, get_token
+from django.middleware.csrf import get_token
 from django.utils import translation
 from django.utils.timezone import now
 from graphene.utils.str_converters import to_snake_case, to_camel_case
@@ -72,7 +72,6 @@ from core.gql_queries import (
 )
 from core.utils import (
     ExtendedConnection,
-    is_this_session_superuser,
     collect_all_gql_permissions,
 )
 from core.models import (
@@ -338,16 +337,15 @@ class OpenIMISMutation(graphene.relay.ClientIDMutation):
         request = getattr(info, "context", None)
 
         user_agent = request.headers.get("User-Agent", "")
-        current_session_key = request.session.session_key
-        if not is_this_session_superuser(current_session_key):
-            if not any(
-                bypass in user_agent
-                for bypass in getattr(settings, "USER_AGENT_CSRF_BYPASS", [])
-            ):
-                csrf_middleware = CsrfViewMiddleware(lambda req: None)
-                reason = csrf_middleware.process_view(request, None, (), {})
-                if reason:
-                    raise PermissionDenied("CSRF token missing or incorrect.")
+
+        if not any(
+            bypass in user_agent
+            for bypass in getattr(settings, "USER_AGENT_CSRF_BYPASS", [])
+        ):
+            session_csrf = request.session['csrftoken']
+            request_csrf = request.META['HTTP_X_CSRFTOKEN']
+            if session_csrf != request_csrf:
+                raise PermissionDenied("CSRF token missing or incorrect.")
 
         mutation_log = MutationLog.objects.create(
             json_content=json.dumps(data, cls=OpenIMISJSONEncoder),
@@ -649,16 +647,15 @@ class OrderedDjangoFilterConnectionField(DjangoFilterConnectionField):
             raise PermissionDenied(_("unauthorized"))
 
         user_agent = request.headers.get("User-Agent", "")
-        current_session_key = request.session.session_key
-        if not is_this_session_superuser(current_session_key):
-            if not any(
-                bypass in user_agent
-                for bypass in getattr(settings, "USER_AGENT_CSRF_BYPASS", [])
-            ):
-                csrf_middleware = CsrfViewMiddleware(lambda req: None)
-                reason = csrf_middleware.process_view(request, None, (), {})
-                if reason:
-                    raise PermissionDenied("CSRF token missing or incorrect.")
+
+        if not any(
+            bypass in user_agent
+            for bypass in getattr(settings, "USER_AGENT_CSRF_BYPASS", [])
+        ):
+            session_csrf = request.session['csrftoken']
+            request_csrf = request.META['HTTP_X_CSRFTOKEN']
+            if session_csrf != request_csrf:
+                raise PermissionDenied("CSRF token missing or incorrect.")
 
         qs = super(DjangoFilterConnectionField, cls).resolve_queryset(
             connection, iterable, info, args
@@ -2153,7 +2150,9 @@ class GetCsrfTokenMutation(graphene.Mutation):
         csrf_token = get_token(info.context)
         if not csrf_token:
             raise GraphQLError("CSRF token could not be generated")
-
+        if info.context and hasattr(info.context, 'session'):
+            info.context.session['csrftoken'] = csrf_token
+            info.context.session.save()
         return GetCsrfTokenMutation(csrf_token=csrf_token)
 
 
