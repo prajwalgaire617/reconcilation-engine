@@ -195,6 +195,18 @@ class ParsedJSONString(graphene.JSONString):
         )
 
 
+def _check_csrf_token(request):
+    user_agent = request.headers.get("User-Agent", "")
+    if not (settings.MODE == 'dev' or settings.IS_TESTING or any(
+        bypass in user_agent
+        for bypass in getattr(settings, "USER_AGENT_CSRF_BYPASS", [])
+    )):
+        session_csrf = request.session['csrftoken']
+        request_csrf = request.META['HTTP_X_CSRFTOKEN']
+        if session_csrf != request_csrf:
+            raise PermissionDenied("CSRF token missing or incorrect.")
+
+
 class OpenIMISJSONEncoder(DjangoJSONEncoder):
     def default(self, o):
         if isinstance(o, HttpRequest):
@@ -336,16 +348,7 @@ class OpenIMISMutation(graphene.relay.ClientIDMutation):
     def mutate_and_get_payload(cls, root, info, **data):
         request = getattr(info, "context", None)
 
-        user_agent = request.headers.get("User-Agent", "")
-
-        if not any(
-            bypass in user_agent
-            for bypass in getattr(settings, "USER_AGENT_CSRF_BYPASS", [])
-        ):
-            session_csrf = request.session['csrftoken']
-            request_csrf = request.META['HTTP_X_CSRFTOKEN']
-            if session_csrf != request_csrf:
-                raise PermissionDenied("CSRF token missing or incorrect.")
+        _check_csrf_token(request)
 
         mutation_log = MutationLog.objects.create(
             json_content=json.dumps(data, cls=OpenIMISJSONEncoder),
@@ -646,16 +649,7 @@ class OrderedDjangoFilterConnectionField(DjangoFilterConnectionField):
         if not info.context.user.is_authenticated:
             raise PermissionDenied(_("unauthorized"))
 
-        user_agent = request.headers.get("User-Agent", "")
-
-        if not any(
-            bypass in user_agent
-            for bypass in getattr(settings, "USER_AGENT_CSRF_BYPASS", [])
-        ):
-            session_csrf = request.session['csrftoken']
-            request_csrf = request.META['HTTP_X_CSRFTOKEN']
-            if session_csrf != request_csrf:
-                raise PermissionDenied("CSRF token missing or incorrect.")
+        _check_csrf_token(request)
 
         qs = super(DjangoFilterConnectionField, cls).resolve_queryset(
             connection, iterable, info, args
