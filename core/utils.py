@@ -628,27 +628,29 @@ def get_first_or_default_language():
 
 
 def insert_role_right_for_system(system_role, right_id, apps):
-    RoleRight = apps.get_model("core", "RoleRight")
-    Role = apps.get_model("core", "Role")
-    existing_roles = Role.objects.filter(
-        is_system=system_role, validity_to__isnull=True
-    )
-    if not existing_roles:
-        logger.warning(
-            "Migration requested a role_right for system role %s but couldn't find that role",
-            system_role,
-        )
-    else:
-        for existing_role in existing_roles:
-            role_rights = RoleRight.objects.filter(
-                role=existing_role, right_id=right_id
-            ).first()
-            if not role_rights:
-                RoleRight.objects.create(
-                    role=existing_role,
-                    right_id=right_id,
-                    validity_from=datetime.datetime.now(),
-                )
+    pass
+    # do not manage the role and right via migrations
+    # RoleRight = apps.get_model("core", "RoleRight")
+    # Role = apps.get_model("core", "Role")
+    # existing_roles = Role.objects.filter(
+    #     is_system=system_role, validity_to__isnull=True
+    # )
+    # if not existing_roles:
+    #     logger.warning(
+    #         "Migration requested a role_right for system role %s but couldn't find that role",
+    #         system_role,
+    #     )
+    # else:
+    #     for existing_role in existing_roles:
+    #         role_rights = RoleRight.objects.filter(
+    #             role=existing_role, right_id=right_id
+    #         ).first()
+    #         if not role_rights:
+    #             RoleRight.objects.create(
+    #                 role=existing_role,
+    #                 right_id=right_id,
+    #                 validity_from=datetime.datetime.now(),
+    #             )
 
 
 def remove_role_right_for_system(system_role, right_id, apps):
