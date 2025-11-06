@@ -20,7 +20,10 @@ from zxcvbn import zxcvbn
 import datetime
 from django.core.cache import caches
 from functools import lru_cache
+# utils/request_local.py
+import threading
 
+_request_local = threading.local()
 
 logger = logging.getLogger(__file__)
 
@@ -43,6 +46,19 @@ __all__ = [
     "get_scheduler_method_ref",
     "ExtendedRelayConnection",
 ]
+
+
+def get_current_user():
+    return getattr(_request_local, "user", None)
+
+
+def set_current_user(user):
+    _request_local.user = user
+
+
+def clear_current_user():
+    if hasattr(_request_local, "user"):
+        del _request_local.user
 
 
 class TimeUtils(object):
@@ -136,18 +152,22 @@ def __place_the_filters(date_start, date_end):
 
 
 def append_validity_filter(**kwargs):
-    default_filter = kwargs.get("applyDefaultValidityFilter", False)
-    date_valid_from = kwargs.get("dateValidFrom__Gte", None)
-    date_valid_to = kwargs.get("dateValidTo__Lte", None)
+    default_filter = kwargs.pop("applyDefaultValidityFilter", False)
+    date_valid_from = kwargs.pop("dateValidFrom__Gte", None)
+    date_valid_to = kwargs.pop("dateValidTo__Lte", None)
     filters = []
     # check if we can use default filter validity
     if date_valid_from is None and date_valid_to is None:
         if default_filter:
-            filters = [*filter_validity_business_model(**kwargs)]
+            filters = [*filter_validity_business_model()]
         else:
             filters = []
     else:
-        filters = [*filter_validity_business_model(**kwargs)]
+        filters = [*filter_validity_business_model(
+            dateValidFrom__Gte=date_valid_from,
+            dateValidTo__Lte=date_valid_to)
+        ]
+
     return filters
 
 
@@ -250,8 +270,8 @@ class CachedManager(models.Manager):
 
     def _normalize_value(self, value):
         """Normalize value for cache key."""
-        if isinstance(value, uuid.UUID):
-            return str(value)
+        if isinstance(value, (str, uuid.UUID)):
+            return str(value).lower()
         try:
             return int(value)
         except (ValueError, TypeError):
@@ -845,7 +865,7 @@ def clear_cache(instance):
 
 
 def get_cache_key(model, id):
-    return f"cs_{model.__name__}_{id}"
+    return f"cs_{model.__name__}_{str(id).lower()}"
 
 
 def is_this_session_superuser(session_key):
