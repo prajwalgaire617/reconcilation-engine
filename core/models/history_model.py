@@ -6,7 +6,7 @@ from django.core.cache import caches
 import datetime as base_datetime
 from dirtyfields import DirtyFieldsMixin
 from django.core.exceptions import ValidationError
-from django.db import models
+from django.db import models, transaction
 from django.db.models import F
 from simple_history.models import HistoricalRecords
 from core.utils import CachedManager, CachedModelMixin
@@ -231,8 +231,6 @@ class HistoryModel(DirtyFieldsMixin, CachedModelMixin, models.Model):
         Returns:
             dict with 'created' and 'updated' counts
         """
-        from django.db import transaction
-
         if not data_list:
             return {'created': 0, 'updated': 0}
 
