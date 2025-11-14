@@ -189,6 +189,7 @@ class RoleRight(VersionedModel):
 
 
 class InteractiveUser(VersionedModel):
+    UNIQUE_FIELDS = {"pk", "uuid", "id", "login_name"}
     USE_CACHE = not settings.IS_TESTING
     id = models.AutoField(db_column="UserID", primary_key=True)
     uuid = models.CharField(

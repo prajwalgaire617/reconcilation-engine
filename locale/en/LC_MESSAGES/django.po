@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2024-09-17 06:55+0000\n"
+"POT-Creation-Date: 2025-09-23 00:45+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -17,94 +17,107 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 
-#: core/gql_queries.py:120 core/gql_queries.py:128 core/gql_queries.py:138
-#: core/gql_queries.py:180 core/schema.py:505 core/schema.py:702
-#: core/schema.py:716 core/schema.py:722 core/schema.py:730 core/schema.py:1085
-#: core/utils.py:225 core/utils.py:230
+#: core/gql/gql_mutations/base_mutation.py:84
+#: core/gql/gql_mutations/base_mutation.py:117
+#: core/gql/gql_mutations/base_mutation.py:159
+#: core/gql/gql_mutations/base_mutation.py:180
+#: core/gql/gql_mutations/base_mutation.py:210
+#: core/gql/gql_mutations/base_mutation.py:249
+#: core/gql/gql_mutations/base_mutation.py:292 core/schema.py:1336
+#: core/schema.py:1368 core/schema.py:1451 core/schema.py:1518
+#: core/schema.py:1558 core/schema.py:1621 core/schema.py:1783
+msgid "mutation.authentication_required"
+msgstr ""
+
+#: core/gql_queries.py:128 core/gql_queries.py:136 core/gql_queries.py:146
+#: core/gql_queries.py:188 core/schema.py:530 core/schema.py:771
+#: core/schema.py:806 core/schema.py:820 core/schema.py:826 core/schema.py:834
+#: core/schema.py:1193 core/schema.py:1338 core/utils.py:515 core/utils.py:520
 msgid "unauthorized"
 msgstr "User not authorized for this operation"
 
-msgid "unauthorized.location"
-msgstr "User not authorized for this operation due to limited location permissions"
+#: core/schema.py:1340
+msgid "mutation.duplicate_of_role_name"
+msgstr ""
 
-#: core/schema.py:1537
+#: core/schema.py:1652
 msgid "mutation.user_email_invalid"
 msgstr ""
 
-#: core/schema.py:1540
+#: core/schema.py:1655
 msgid "mutation.user_email_duplicated"
 msgstr ""
 
-#: core/schema.py:1542
+#: core/schema.py:1657
 msgid "mutation.user_no_email_provided"
 msgstr ""
 
-#: core/schema.py:1547
+#: core/schema.py:1662
 msgid "mutation.user_username_too_long"
 msgstr ""
 
-#: core/schema.py:1550
+#: core/schema.py:1665
 msgid "mutation.user_username_not_changeable"
 msgstr ""
 
-#: core/schema.py:1666
+#: core/schema.py:1795
 msgid "Failed to change user password"
 msgstr ""
 
-#: core/schema.py:1678
+#: core/schema.py:1807
 msgid "Username of the account to recover"
 msgstr ""
 
-#: core/schema.py:1693
+#: core/schema.py:1822
 msgid "Failed to reset password."
 msgstr ""
 
-#: core/schema.py:1704
+#: core/schema.py:1833
 msgid "Username of the user"
 msgstr ""
 
-#: core/schema.py:1707
+#: core/schema.py:1836
 msgid "Token used to validate the user"
 msgstr ""
 
-#: core/schema.py:1710
+#: core/schema.py:1839
 msgid "New password for the user"
 msgstr ""
 
-#: core/schema.py:1734
+#: core/schema.py:1863
 msgid "Failed to set password."
 msgstr ""
 
-#: core/services/userServices.py:38 core/services/userServices.py:144
-#: core/services/userServices.py:186
+#: core/services/userServices.py:40 core/services/userServices.py:147
+#: core/services/userServices.py:189
 msgid "core.user.edit_historical_data_error"
 msgstr ""
 
-#: core/services/userServices.py:242
+#: core/services/userServices.py:251
 msgid "core.wrong_old_password"
 msgstr "The old password is incorrect"
 
-#: core/services/userServices.py:259
+#: core/services/userServices.py:269
 msgid "Missing username or password"
 msgstr ""
 
-#: core/utils.py:175
+#: core/utils.py:183
 msgid "core.string.over_max_length"
 msgstr "Value %(value)s is over maximum length: %(max_length)s"
 
-#: core/utils.py:194
+#: core/utils.py:202
 msgid "core.insuree.unknown_gender"
 msgstr "Unknown gender"
 
-#: core/utils.py:196
+#: core/utils.py:204
 msgid "core.insuree.unknown_dob"
 msgstr "Unknown date of birth"
 
-#: core/utils.py:361
+#: core/utils.py:649
 msgid "core.utils.schema_validation.invalid_schema"
 msgstr "Schema is not valid %(error)"
 
-#: core/utils.py:365
+#: core/utils.py:653
 msgid "core.utils.schema_validation.invalid_json"
 msgstr "Schema json is not valid %(error)"
 
@@ -131,10 +144,14 @@ msgstr "Field cannot end with whitespace."
 msgid "Object code %(code)s is not unique."
 msgstr ""
 
-#: core/views.py:38
+#: core/views.py:45
 msgid "Only user requesting export can fetch request"
 msgstr ""
 
+#, fuzzy
+#~ msgid "unauthorized.location"
+#~ msgstr ""
+#~ "User not authorized for this operation due to limited location permissions"
 
 # django.po
 msgid "core.user_activity_report.claim"

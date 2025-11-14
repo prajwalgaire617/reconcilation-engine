@@ -44,7 +44,7 @@ from django.db import IntegrityError, transaction
 from django.db.models import Q, Count
 from django.db.models.expressions import RawSQL
 from django.http import HttpRequest
-from django.middleware.csrf import CsrfViewMiddleware, get_token
+from django.middleware.csrf import get_token
 from django.utils import translation
 from django.utils.timezone import now
 from graphene.utils.str_converters import to_snake_case, to_camel_case
@@ -72,7 +72,6 @@ from core.gql_queries import (
 )
 from core.utils import (
     ExtendedConnection,
-    is_this_session_superuser,
     collect_all_gql_permissions,
 )
 from core.models import (
@@ -194,6 +193,18 @@ class ParsedJSONString(graphene.JSONString):
         return ParsedJSONString.parse_keys(
             graphene.JSONString.parse_value(value), to_snake_case
         )
+
+
+def _check_csrf_token(request):
+    user_agent = request.headers.get("User-Agent", "")
+    if not (settings.MODE == 'dev' or settings.IS_TESTING or any(
+        bypass in user_agent
+        for bypass in getattr(settings, "USER_AGENT_CSRF_BYPASS", [])
+    )):
+        session_csrf = request.session['csrftoken']
+        request_csrf = request.META['HTTP_X_CSRFTOKEN']
+        if session_csrf != request_csrf:
+            raise PermissionDenied("CSRF token missing or incorrect.")
 
 
 class OpenIMISJSONEncoder(DjangoJSONEncoder):
@@ -337,17 +348,7 @@ class OpenIMISMutation(graphene.relay.ClientIDMutation):
     def mutate_and_get_payload(cls, root, info, **data):
         request = getattr(info, "context", None)
 
-        user_agent = request.headers.get("User-Agent", "")
-        current_session_key = request.session.session_key
-        if not is_this_session_superuser(current_session_key):
-            if not any(
-                bypass in user_agent
-                for bypass in getattr(settings, "USER_AGENT_CSRF_BYPASS", [])
-            ):
-                csrf_middleware = CsrfViewMiddleware(lambda req: None)
-                reason = csrf_middleware.process_view(request, None, (), {})
-                if reason:
-                    raise PermissionDenied("CSRF token missing or incorrect.")
+        _check_csrf_token(request)
 
         mutation_log = MutationLog.objects.create(
             json_content=json.dumps(data, cls=OpenIMISJSONEncoder),
@@ -648,17 +649,7 @@ class OrderedDjangoFilterConnectionField(DjangoFilterConnectionField):
         if not info.context.user.is_authenticated:
             raise PermissionDenied(_("unauthorized"))
 
-        user_agent = request.headers.get("User-Agent", "")
-        current_session_key = request.session.session_key
-        if not is_this_session_superuser(current_session_key):
-            if not any(
-                bypass in user_agent
-                for bypass in getattr(settings, "USER_AGENT_CSRF_BYPASS", [])
-            ):
-                csrf_middleware = CsrfViewMiddleware(lambda req: None)
-                reason = csrf_middleware.process_view(request, None, (), {})
-                if reason:
-                    raise PermissionDenied("CSRF token missing or incorrect.")
+        _check_csrf_token(request)
 
         qs = super(DjangoFilterConnectionField, cls).resolve_queryset(
             connection, iterable, info, args
@@ -1312,7 +1303,7 @@ class Query(graphene.ObjectType):
                     ModulePermissionGQLType(module_name=app, permissions=permissions)
                 )
 
-        return ModulePermissionsListGQLType(permissions=config)
+        return ModulePermissionsListGQLType(module_perms_list=config)
 
     def resolve_custom_filters(self, info, **kwargs):
         user = info.context.user
@@ -2153,7 +2144,9 @@ class GetCsrfTokenMutation(graphene.Mutation):
         csrf_token = get_token(info.context)
         if not csrf_token:
             raise GraphQLError("CSRF token could not be generated")
-
+        if info.context and hasattr(info.context, 'session'):
+            info.context.session['csrftoken'] = csrf_token
+            info.context.session.save()
         return GetCsrfTokenMutation(csrf_token=csrf_token)
 
 
