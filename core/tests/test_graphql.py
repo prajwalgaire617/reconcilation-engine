@@ -2,6 +2,7 @@ from core.models.openimis_graphql_test_case import (
     openIMISGraphQLTestCase,
     BaseTestContext,
 )
+from core.models import Language
 from core.test_helpers import create_test_interactive_user
 from core import filter_validity
 from location.models import Location
@@ -23,6 +24,12 @@ class gqlTest(openIMISGraphQLTestCase):
         cls.admin_token_context = BaseTestContext(user=cls.admin_user)
         cls.admin_token = cls.admin_token_context.get_jwt()
         cls.disctict = Location.objects.filter(type="D", *filter_validity()).first()
+
+        # Create French language if it doesn't exist
+        Language.objects.get_or_create(
+            code="fr",
+            defaults={"name": "Français", "sort_order": 1}
+        )
 
     def test_login_successful(self):
         variables = {
@@ -133,7 +140,7 @@ class gqlTest(openIMISGraphQLTestCase):
                 "districts": [self.disctict.id],
                 "locationId": None,
                 "language": "en",
-                "roles": ["4"],
+                "roles": ["1"],
                 "substitutionOfficerId": None,
                 "clientMutationLabel": "Create user",
                 "clientMutationId": "95b431f3-0c12-40ad-bc01-51034702366d",

@@ -119,30 +119,40 @@ class UtilsTestCase(TestCase):
 
     def test_cache_invalidation(self):
         User.USE_CACHE = True
+        create_test_interactive_user(username="one")
+        create_test_interactive_user(username="two")
         users = list(User.objects.all())
         users_id = [user.id for user in users]
-        users_0_no_cache_get = User.objects.get(id=users_id[0])
+        # get 0 without cache
+        users_0_no_cache_get = User.objects.get(id=users_id[0], *User.filter_validity())
+        # get 0 with cache
         users_0_filter = User.objects.filter(id=users_id[0]).first()
+        # get 1 with cache
+        users_1_filter = User.objects.filter(id=users_id[-1]).first()
         self.assertEquals(
             users_0_no_cache_get,
             users_0_filter,
             "get and filter should retrieve the same object",
         )
+        # update 1, cache should be invalidaed
         users_0_filter.username = users_0_filter.username + "T"
         users_0_filter.save()
+        # get use from cache / partially from cache
         users_filter = list(User.objects.filter(id__in=users_id))
-        caches["default"].delete(f"cd_User_{users_filter[2].id}")
-        users.remove(users_0_no_cache_get)
-        users_filter.remove(users_0_filter)
         users_0_filter = User.objects.filter(id=users_id[0]).first()
         self.assertNotEquals(
             users_0_no_cache_get.username,
             users_0_filter.username,
             "the object should be different, cache not invalidated properly",
         )
-        self.assertNotEquals(
-            users,
-            users_filter,
+                # remove user 1 from cache
+        caches["default"].delete(f"cd_User_{users_1_filter.id}")
+        # remove user 1 from all user list (old and new)
+        users.remove(users_0_no_cache_get)
+        users_filter.remove(users_0_filter)
+        self.assertEquals(
+            sorted(users, key=lambda x: x.id),
+            sorted(users_filter, key=lambda x: x.id),
             "should be the same list even if user_filter comes partially from cache",
         )
         caches["default"].clear()

@@ -6,7 +6,7 @@ from django.test.client import RequestFactory
 from django.apps import apps
 import datetime
 import core
-from core.models import InteractiveUser, Officer, UserRole
+from core.models import InteractiveUser, Officer, UserRole, Language
 from core.services import (
     create_or_update_interactive_user,
     create_or_update_core_user,
@@ -17,6 +17,7 @@ from core.services import (
 )
 from django.test import TestCase
 from location.models import OfficerVillage
+from location.test_helpers import create_test_village, create_test_health_facility
 
 logger = logging.getLogger(__file__)
 postgresql = "postgresql"
@@ -33,6 +34,20 @@ class UserServicesTest(TestCase):
         core.datetime = importlib.import_module(".datetimes.ad_datetime", "core")
         self.claim_admin_class = apps.get_model("core", "ClaimAdmin")
         self.factory = RequestFactory()
+        # Create test villages
+        self.test_village1 = create_test_village(custom_props={"name": "Test Village 1", "code": "TV1"})
+        self.test_village2 = create_test_village(custom_props={"name": "Test Village 2", "code": "TV2"})
+        self.test_village3 = create_test_village(custom_props={"name": "Test Village 3", "code": "TV3"})
+
+        # Create French language if it doesn't exist
+        Language.objects.get_or_create(
+            code="fr",
+            defaults={"name": "Français", "sort_order": 1}
+        )
+
+        # Create test health facility
+        self.test_hf = create_test_health_facility()
+        self.test_hf2 = create_test_health_facility()
 
     def test_iuser_min(self):
         roles = [11]
@@ -75,7 +90,7 @@ class UserServicesTest(TestCase):
                 language="fr",
                 phone="+123456789",
                 email=f"{username}@illuminati.int",
-                health_facility_id=1,
+                health_facility_id=self.test_hf.id,
                 password=PASSWORD,
             ),
             audit_user_id=999,
@@ -116,7 +131,7 @@ class UserServicesTest(TestCase):
                 language="fr",
                 phone="+123456789",
                 email=f"{username}@illuminati.int",
-                health_facility_id=1,
+                health_facility_id=self.test_hf.id,
                 password=PASSWORD,
             ),
             audit_user_id=999,
@@ -151,7 +166,7 @@ class UserServicesTest(TestCase):
                 language="en",
                 phone="updated phone",
                 email=f"{username}@updated.int",
-                health_facility_id=2,
+                health_facility_id=self.test_hf2.id,
                 password=f"{PASSWORD}updated",
             ),
             audit_user_id=111,
@@ -252,6 +267,7 @@ class UserServicesTest(TestCase):
 
     def test_officer_max(self):
         username = "tstsvco2"
+        village_ids = [self.test_village1.id, self.test_village2.id, self.test_village3.id]
         officer, created = create_or_update_officer(
             user_id=None,
             data=dict(
@@ -262,7 +278,7 @@ class UserServicesTest(TestCase):
                 phone="+12345678",
                 email="imis@foo.be",
                 location_id=1,
-                village_ids=[22, 35, 50],
+                village_ids=village_ids,
                 substitution_officer_id=1,
                 works_to="2025-01-01",
                 phone_communication=True,
@@ -271,6 +287,7 @@ class UserServicesTest(TestCase):
             audit_user_id=999,
             connected=True,
         )
+        officer.refresh_from_db()
         self.assertTrue(created)
         self.assertIsNotNone(officer)
         self.assertEquals(officer.username, username)
@@ -289,7 +306,7 @@ class UserServicesTest(TestCase):
                 .order_by("location_id")
                 .values_list("location_id", flat=True)
             ),
-            [22, 35, 50],
+            sorted(village_ids),
         )
         self.assertEquals(officer.phone, "+12345678")
         self.assertEquals(officer.email, "imis@foo.be")
@@ -299,6 +316,7 @@ class UserServicesTest(TestCase):
 
     def test_officer_update(self):
         username = "tstsvco2"
+        village_ids = [self.test_village1.id, self.test_village2.id, self.test_village3.id]
         officer, created = create_or_update_officer(
             user_id=None,
             data=dict(
@@ -309,7 +327,7 @@ class UserServicesTest(TestCase):
                 phone="+12345678",
                 email="imis@foo.be",
                 location_id=1,
-                village_ids=[22, 35, 50],
+                village_ids=village_ids,
                 substitution_officer_id=1,
                 works_to="2025-01-01",
                 phone_communication=True,
@@ -318,6 +336,7 @@ class UserServicesTest(TestCase):
             audit_user_id=999,
             connected=True,
         )
+        officer.refresh_from_db()
         self.assertTrue(created)
         self.assertIsNotNone(officer)
         self.assertEquals(officer.username, username)
@@ -336,7 +355,7 @@ class UserServicesTest(TestCase):
                 .order_by("location_id")
                 .values_list("location_id", flat=True)
             ),
-            [22, 35, 50],
+            sorted(village_ids),
         )
         self.assertEquals(officer.phone, "+12345678")
         self.assertEquals(officer.email, "imis@foo.be")
@@ -351,7 +370,7 @@ class UserServicesTest(TestCase):
                 phone="+00000",
                 email="imis@bar.be",
                 location_id=17,
-                village_ids=[22],
+                village_ids=[self.test_village1.id],
                 substitution_officer_id=None,
                 works_to=datetime.date(2025, 5, 5),
                 phone_communication=False,
@@ -380,7 +399,7 @@ class UserServicesTest(TestCase):
                 .order_by("location_id")
                 .values_list("location_id", flat=True)
             ),
-            [22],
+            [self.test_village1.id],
         )
         self.assertEquals(officer2.phone, "+00000")
         self.assertEquals(officer2.email, "imis@bar.be")
@@ -418,7 +437,7 @@ class UserServicesTest(TestCase):
                 dob="1999-05-05",
                 phone="+12345678",
                 email="imis@foo.be",
-                health_facility_id=1,
+                health_facility_id=self.test_hf.id,
             ),
             audit_user_id=999,
             connected=True,
@@ -430,7 +449,7 @@ class UserServicesTest(TestCase):
         self.assertEquals(claim_admin.other_names, "Other 1 2 3")
         self.assertEquals(claim_admin.audit_user_id, 999)
         self.assertTrue(claim_admin.has_login)
-        self.assertEquals(claim_admin.health_facility_id, 1)
+        self.assertEquals(claim_admin.health_facility_id, self.test_hf.id)
         self.assertEquals(claim_admin.phone, "+12345678")
         self.assertEquals(claim_admin.email_id, "imis@foo.be")
 
