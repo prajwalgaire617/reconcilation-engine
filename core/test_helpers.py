@@ -318,6 +318,11 @@ def create_test_role(perm_names, name=None, is_system=0, is_blocked=False, custo
     if name is None:
         name = "TestRole"
 
+    # Check if role already exists by name
+    existing_role = Role.objects.filter(name=name, *filter_validity()).first()
+    if existing_role:
+        return existing_role
+
     # Collect all permissions from DEFAULT configs
     permissions_dict = collect_all_gql_permissions()
 
