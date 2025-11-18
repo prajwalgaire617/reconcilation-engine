@@ -145,7 +145,7 @@ class UtilsTestCase(TestCase):
             users_0_filter.username,
             "the object should be different, cache not invalidated properly",
         )
-                # remove user 1 from cache
+        # remove user 1 from cache
         caches["default"].delete(f"cd_User_{users_1_filter.id}")
         # remove user 1 from all user list (old and new)
         users.remove(users_0_no_cache_get)

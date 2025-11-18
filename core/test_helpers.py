@@ -3,8 +3,6 @@ from core.models.openimis_graphql_test_case import openIMISGraphQLTestCase
 from core.models.user import ClaimAdmin
 from core.services.userServices import (
     create_or_update_officer_villages,
-    create_or_update_interactive_user,
-    create_or_update_core_user,
 )
 from core.services import create_or_update_user_roles
 from core.utils import collect_all_gql_permissions
@@ -597,7 +595,7 @@ def create_imis_admin_role():
     Create the IMIS Administrator role with extensive permissions.
     This role has admin-level access including user and role management.
     """
-    return  Role.objects.filter(is_system=64, *Role.filter_validity()).first()
+    return Role.objects.filter(is_system=64, *Role.filter_validity()).first()
 
 
 def create_receptionist_role():
