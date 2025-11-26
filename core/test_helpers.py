@@ -264,13 +264,13 @@ def create_enrolment_officer_role():
     """
     enrolment_officer_perms = [
         "gql_query_insuree_perms",
-        "gql_mutation_create_insuree_perms",
-        "gql_mutation_update_insuree_perms",
+        "gql_mutation_update_insurees_perms",
+        "gql_mutation_create_insurees_perms",
         "gql_query_locations_perms",
         "gql_query_products_perms",
         "gql_query_policies_perms",
         "gql_mutation_create_policies_perms",
-        "gql_mutation_update_policies_perms",
+        "gql_mutation_edit_policies_perms",
     ]
     return create_test_role(perm_names=enrolment_officer_perms, name="EnrolmentOfficer", is_system=1)
 
@@ -325,15 +325,19 @@ def create_test_role(perm_names, name=None, is_system=0, is_blocked=False, custo
     permissions_dict = collect_all_gql_permissions()
 
     # Flatten permission IDs for the given names
-    right_ids = []
+    flat_perms = {}
     for app_perms in permissions_dict.values():
         for perm_name, perm_ids in app_perms.items():
-            if perm_name in perm_names:
-                right_ids.extend(perm_ids)
+            flat_perms[perm_name] = perm_ids
 
+    right_ids = []
+    for perm_name in perm_names:
+        if perm_name not in flat_perms:
+             raise Exception(f"Permission {perm_name} not found")
+        right_ids.extend(flat_perms[perm_name])
+    
     # Remove duplicates
     right_ids = list(set(right_ids))
-
     # Create the role
     role_data = {
         "name": name,
