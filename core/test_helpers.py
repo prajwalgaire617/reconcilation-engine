@@ -1,4 +1,38 @@
-from core.models import Officer, InteractiveUser, User, TechnicalUser, Role, RoleRight, filter_validity
+from core.models import Officer, InteractiveUser, User, TechnicalUser, Role, RoleRight, Language, filter_validity
+
+
+def create_test_language(code="en", name="English", sort_order=1, custom_props=None):
+    """
+    Create a test language in the database.
+
+    Args:
+        code: Language code (primary key)
+        name: Language name
+        sort_order: Sort order for the language
+        custom_props: Additional properties for the language
+
+    Returns:
+        Language object
+    """
+    if custom_props is None:
+        custom_props = {}
+    else:
+        custom_props = {k: v for k, v in custom_props.items() if hasattr(Language, k)}
+
+    # Check if language already exists
+    existing_language = Language.objects.filter(code=code).first()
+    if existing_language:
+        return existing_language
+
+    # Create new language
+    language_data = {
+        "code": code,
+        "name": name,
+        "sort_order": sort_order,
+        **custom_props,
+    }
+
+    return Language.objects.create(**language_data)
 from core.models.openimis_graphql_test_case import openIMISGraphQLTestCase
 from core.models.user import ClaimAdmin
 from core.services.userServices import (
@@ -66,6 +100,17 @@ def create_test_interactive_user(
         custom_props = {
             k: v for k, v in custom_props.items() if hasattr(InteractiveUser, k)
         }
+
+    # Handle language field specially - convert code to Language instance
+    if "language" in custom_props:
+        language_value = custom_props["language"]
+        if isinstance(language_value, str):
+            custom_props["language"] = create_test_language(code=language_value)
+        # If it's already a Language instance, keep it as is
+    elif "language_id" in custom_props:
+        language_code = custom_props["language_id"]
+        custom_props["language"] = create_test_language(code=language_code)
+        del custom_props["language_id"]
     if roles is None:
         # Create a test role with default permissions instead of hardcoded role IDs
         default_perm_names = [
@@ -95,8 +140,19 @@ def create_test_interactive_user(
     i_user = InteractiveUser.objects.filter(login_name=username).first()
 
     if i_user:
-        # TODO add custom prop to existing user
+        # Update existing i_user with custom props
+        for key, value in custom_props.items():
+            if hasattr(i_user, key):
+                setattr(i_user, key, value)
+        i_user.save()
         user = User.objects.filter(i_user=i_user).first()
+        # Update existing user if found and if there are custom props for User model
+        if user:
+            user_props = {k: v for k, v in custom_props.items() if hasattr(User, k)}
+            if user_props:
+                for key, value in user_props.items():
+                    setattr(user, key, value)
+                user.save()
     else:
         user = User.objects.filter(
             username=username,
