@@ -133,7 +133,7 @@ class openIMISGraphQLTestCase(GraphQLTestCase):
         # cls.client=Client(cls.schema)
         clear_current_user()
         cache.clear()
-        super().setUp()
+        super().setUp(self)
 
     def get_mutation_result(
         self, mutation_uuid, token, internal=False, allow_exceptions=True
