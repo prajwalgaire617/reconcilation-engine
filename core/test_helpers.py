@@ -1,4 +1,23 @@
-from core.models import Officer, InteractiveUser, User, TechnicalUser, Role, RoleRight, Language, filter_validity
+from core.models import (
+    Officer,
+    InteractiveUser,
+    User,
+    TechnicalUser,
+    Language,
+    Role,
+    RoleRight,
+)
+from core.models.openimis_graphql_test_case import openIMISGraphQLTestCase
+from core.models.user import ClaimAdmin
+from core.services.userServices import (
+    create_or_update_officer_villages,
+)
+from core.services import create_or_update_user_roles
+from core.utils import collect_all_gql_permissions
+from location.models import Location
+from location.test_helpers import create_test_health_facility
+from uuid import uuid4
+import datetime
 
 
 def create_test_language(code="en", name="English", sort_order=1, custom_props=None):
@@ -33,18 +52,6 @@ def create_test_language(code="en", name="English", sort_order=1, custom_props=N
     }
 
     return Language.objects.create(**language_data)
-from core.models.openimis_graphql_test_case import openIMISGraphQLTestCase
-from core.models.user import ClaimAdmin
-from core.services.userServices import (
-    create_or_update_officer_villages,
-)
-from core.services import create_or_update_user_roles
-from core.utils import collect_all_gql_permissions
-from location.models import Location
-from location.test_helpers import create_test_health_facility
-from uuid import uuid4
-import datetime
-
 
 def create_test_officer(valid=True, custom_props=None, villages=[]):
     if custom_props is None:
@@ -82,7 +89,7 @@ def create_test_officer(valid=True, custom_props=None, villages=[]):
         eo = Officer.objects.create(**data)
 
     if not villages:
-        villages == Location.objects.filter(*filter_validity(), type="V").first()
+        villages == Location.objects.filter(*Location.filter_validity(), type="V").first()
     if eo:
         _ = create_or_update_officer_villages(eo, [v.id for v in villages], 1)
         return eo
@@ -373,7 +380,7 @@ def create_test_role(perm_names, name=None, is_system=0, is_blocked=False, custo
         name = "TestRole"
 
     # Check if role already exists by name
-    existing_role = Role.objects.filter(name=name, *filter_validity()).first()
+    existing_role = Role.objects.filter(name=name, *Role.filter_validity()).first()
     if existing_role:
         return existing_role
 
