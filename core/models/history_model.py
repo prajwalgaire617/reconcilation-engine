@@ -9,6 +9,7 @@ from django.core.exceptions import ValidationError
 from django.db import models, transaction
 from django.db.models import F
 from simple_history.models import HistoricalRecords
+from simple_history.utils import bulk_create_with_history, bulk_update_with_history
 from core.utils import CachedManager, CachedModelMixin
 
 # from core.datetimes.ad_datetime import datetime as py_datetime
@@ -257,7 +258,7 @@ class HistoryModel(DirtyFieldsMixin, CachedModelMixin, models.Model):
                         setattr(instance, field, value)
                 instance.user_updated = user
                 instance.date_updated = now
-                instance.version = F('version') + 1
+                instance.version = instance.version + 1
                 to_update.append(instance)
             else:
                 create_data = {k: v for k, v in data.items() if k not in exclude_fields}
@@ -275,7 +276,7 @@ class HistoryModel(DirtyFieldsMixin, CachedModelMixin, models.Model):
             updated_count = 0
 
             if to_create:
-                cls.objects.bulk_create(to_create, batch_size=batch_size)
+                bulk_create_with_history(to_create, cls, batch_size=batch_size, default_user=user)
                 created_count = len(to_create)
 
             if to_update:
@@ -283,14 +284,7 @@ class HistoryModel(DirtyFieldsMixin, CachedModelMixin, models.Model):
                                 if not f.startswith('_') and f not in exclude_fields]
                 update_fields += ['user_updated', 'date_updated', 'version']
 
-                cls.objects.bulk_update(to_update, update_fields, batch_size=batch_size)
-
-                ids = [obj.id for obj in to_update]
-                updated_objects = cls.objects.filter(id__in=ids).only('id', 'version')
-                version_map = {obj.id: obj.version for obj in updated_objects}
-                for obj in to_update:
-                    obj.version = version_map.get(obj.id, obj.version)
-
+                bulk_update_with_history(to_update, cls, update_fields, batch_size=batch_size, default_user=user)
                 updated_count = len(to_update)
 
         return {'created': created_count, 'updated': updated_count}
