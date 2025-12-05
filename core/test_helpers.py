@@ -7,13 +7,14 @@ from core.models import (
     Role,
     RoleRight,
 )
+from django.core.cache import cache
 from core.models.openimis_graphql_test_case import openIMISGraphQLTestCase
 from core.models.user import ClaimAdmin
 from core.services.userServices import (
     create_or_update_officer_villages,
 )
 from core.services import create_or_update_user_roles
-from core.utils import collect_all_gql_permissions
+from core.utils import collect_all_gql_permissions, clear_current_user
 from location.models import Location
 from location.test_helpers import create_test_health_facility
 from uuid import uuid4
@@ -101,6 +102,8 @@ def create_test_interactive_user(
     roles=None,
     custom_props=None,
 ):
+    cache.clear()
+    clear_current_user()
     if custom_props is None:
         custom_props = {}
     else:
@@ -162,7 +165,7 @@ def create_test_interactive_user(
                 user.save()
     else:
         user = User.objects.filter(
-            username=username,
+            username=username, *User.filter_validity()
         ).first()
         if user and user.i_user:
             i_user = user.i_user
@@ -184,6 +187,8 @@ def create_test_interactive_user(
             username=username,
             i_user=i_user,
         )
+    else:
+        user.save()
     i_user.set_password(password)
     i_user.save()
     create_or_update_user_roles(i_user, roles, None)
