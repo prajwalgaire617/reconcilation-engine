@@ -106,11 +106,9 @@ class HistoryModel(DirtyFieldsMixin, CachedModelMixin, models.Model):
 
     def _get_user(self, user=None, username=None):
 
-        audit_user = get_current_user()
+        audit_user = user or get_current_user()
         if audit_user:
             return audit_user
-        elif user:
-            return user
         elif username:
             audit_user = User.objects.get(username=username, *User.filter_validity())
             return audit_user

@@ -17,6 +17,8 @@ from django.db import models
 from django.utils.crypto import salted_hmac
 from graphql import ResolveInfo
 import core
+from hashlib import sha256
+from secrets import token_hex
 from django.contrib.auth.password_validation import validate_password
 from ..utils import filter_validity, CachedManager
 from .base import ExtendableModel, Language, UUIDModel
@@ -348,12 +350,9 @@ class InteractiveUser(VersionedModel):
             cache.set("is_admin_" + str(self.id), is_admin, 600)
         return is_admin
 
-    def set_password(self, raw_password):
-        from hashlib import sha256
-        from secrets import token_hex
-
+    def set_password(self, raw_password, private_key=token_hex(128)):     
         validate_password(raw_password)
-        self.private_key = token_hex(128)
+        self.private_key = private_key
         pwd_hash = sha256()
         pwd_hash.update(f"{raw_password.rstrip()}{self.private_key}".encode())
         self.password = (

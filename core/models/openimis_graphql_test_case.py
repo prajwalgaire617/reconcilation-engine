@@ -19,6 +19,10 @@ logger = logging.getLogger(__name__)
 
 
 class BaseTestContext:
+
+    cookies = None
+    jwt = None
+    user = None
     def __init__(self, user=None, method="GET", path="/", data=None, headers=None):
         """
         Initialize a test context with realistic request attributes.
@@ -30,7 +34,8 @@ class BaseTestContext:
             data: Request payload (dict for POST/PUT, None for GET).
             headers: Custom HTTP headers (dict).
         """
-        cookies = {}
+        self.cookies = {}
+        self.META = {}
         self.factory = RequestFactory()
 
         # Initialize session
@@ -42,8 +47,7 @@ class BaseTestContext:
                 user.id
             )  # Store user ID or other relevant data
             self.session.save()  # Save session to generate session_key
-            self.jwt = get_token_jwt(self.user, self)
-            cookies["JWT"] = self.jwt
+            self.get_jwt()
         else:
             self.user = AnonymousUser()
 
@@ -83,12 +87,17 @@ class BaseTestContext:
                 self.META[meta_key] = value
 
         # Add cookies (e.g., session ID and JWT token)
-        cookies["sessionid"] = self.session.session_key
-        if cookies:
+        self.cookies["sessionid"] = self.session.session_key
+
+        self._gen_meta()
+
+    def _gen_meta(self):
+        if self.cookies:
             cookie_string = "; ".join(
-                f"{key}={value}" for key, value in cookies.items()
+                f"{key}={value}" for key, value in self.cookies.items()
             )
             self.META["HTTP_COOKIE"] = cookie_string
+
 
     def update_meta(self, key, value):
         """Utility method to update META dictionary."""
@@ -100,8 +109,11 @@ class BaseTestContext:
         return self.request
 
     def get_jwt(self):
-        """Return the JWT token."""
-        return getattr(self, "jwt", None)
+        if self.user:
+            self.jwt = get_token_jwt(self.user, self)
+            self.cookies["JWT"] = self.jwt
+            self._gen_meta()
+            return self.jwt
 
 
 class openIMISGraphQLTestCase(GraphQLTestCase):
@@ -124,13 +136,11 @@ class openIMISGraphQLTestCase(GraphQLTestCase):
 
     @classmethod
     def setUpClass(cls):
-        # cls.client=Client(cls.schema)
         clear_current_user()
         cache.clear()
         super(openIMISGraphQLTestCase, cls).setUpClass()
 
     def setUp(self):
-        # cls.client=Client(cls.schema)
         clear_current_user()
         cache.clear()
         super(openIMISGraphQLTestCase, self).setUp()

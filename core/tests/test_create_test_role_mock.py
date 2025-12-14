@@ -3,19 +3,12 @@ from unittest.mock import patch, MagicMock
 import sys
 import os
 
-# Add the package to the path
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../')))
 
 from django.conf import settings
-if not settings.configured:
-    settings.configure(
-        CACHES={'default': {'BACKEND': 'django.core.cache.backends.locmem.LocMemCache'}},
-        DATABASES={'default': {'ENGINE': 'django.db.backends.sqlite3', 'NAME': ':memory:'}}
-    )
-import django
-django.setup()
+
 
 from core.test_helpers import create_test_role
+
 
 class CreateTestRoleMockTest(unittest.TestCase):
     @patch('core.test_helpers.collect_all_gql_permissions')
@@ -50,8 +43,9 @@ class CreateTestRoleMockTest(unittest.TestCase):
         # Call function and expect exception
         with self.assertRaises(Exception) as cm:
             create_test_role(perm_names=['invalid_perm'], name="TestRole")
-        
+
         self.assertEqual(str(cm.exception), "Permission invalid_perm not found")
+
 
 if __name__ == '__main__':
     unittest.main()

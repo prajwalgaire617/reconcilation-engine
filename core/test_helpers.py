@@ -14,7 +14,7 @@ from core.services.userServices import (
     create_or_update_officer_villages,
 )
 from core.services import create_or_update_user_roles
-from core.utils import collect_all_gql_permissions, clear_current_user
+from core.utils import collect_all_gql_permissions, set_current_user
 from location.models import Location
 from location.test_helpers import create_test_health_facility
 from uuid import uuid4
@@ -64,8 +64,9 @@ def create_test_officer(valid=True, custom_props=None, villages=[]):
     uuid = custom_props.pop("uuid", None)
     qs_eo = Officer.objects
     eo = None
+    code = code or "TSTOFF"
     data = {
-        "code": code or "TSTOFF",
+        "code": code,
         "uuid": uuid,
         "last_name": "Officer",
         "other_names": "Test",
@@ -75,16 +76,17 @@ def create_test_officer(valid=True, custom_props=None, villages=[]):
         **custom_props,
     }
 
-    if code:
-        qs_eo = qs_eo.filter(code=code)
+    eo = None
     if uuid:
         qs_eo = qs_eo.filter(uuid=uuid)
-    eo = None
+    elif code:
+        qs_eo = qs_eo.filter(code=code)
+ 
     if code or uuid:
         eo = qs_eo.first()
     if eo:
         data["uuid"] = eo.uuid
-        eo.update(data)
+        eo.update(**data)
     else:
         data["uuid"] = uuid4()
         eo = Officer.objects.create(**data)
@@ -103,7 +105,6 @@ def create_test_interactive_user(
     custom_props=None,
 ):
     cache.clear()
-    clear_current_user()
     if custom_props is None:
         custom_props = {}
     else:
@@ -147,7 +148,7 @@ def create_test_interactive_user(
         test_role = create_test_role(perm_names=default_perm_names, name="TestInteractiveUserRole")
         roles = [1, test_role.id]
     user = None
-    i_user = InteractiveUser.objects.filter(login_name=username).first()
+    i_user = InteractiveUser.objects.filter(login_name=username, *InteractiveUser.filter_validity()).first()
 
     if i_user:
         # Update existing i_user with custom props
@@ -155,7 +156,7 @@ def create_test_interactive_user(
             if hasattr(i_user, key):
                 setattr(i_user, key, value)
         i_user.save()
-        user = User.objects.filter(i_user=i_user).first()
+        user = User.objects.filter(i_user=i_user, *User.filter_validity()).first()
         # Update existing user if found and if there are custom props for User model
         if user:
             user_props = {k: v for k, v in custom_props.items() if hasattr(User, k)}
@@ -189,9 +190,10 @@ def create_test_interactive_user(
         )
     else:
         user.save()
-    i_user.set_password(password)
+    i_user.set_password(password, private_key=i_user.private_key)
     i_user.save()
     create_or_update_user_roles(i_user, roles, None)
+    set_current_user(user)
     return user
 
 

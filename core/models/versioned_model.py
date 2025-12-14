@@ -27,7 +27,7 @@ class BaseVersionedModel(CachedModelMixin, models.Model):
         """
         Overrides the default update to update the cache after saving the instance.
         """
-        obj_data = kwargs.pop("data", {})
+        obj_data = kwargs.pop("data", None)
         if not obj_data:
             obj_data = kwargs
             kwargs = {}
@@ -39,7 +39,7 @@ class BaseVersionedModel(CachedModelMixin, models.Model):
         Overrides the default save to update the cache after saving the instance.
         """
         caching = kwargs.pop("cache_update", True)
-        super().save(*args, **kwargs)
+        super(BaseVersionedModel, self).save(*args, **kwargs)
         if caching:
             # Build the cache key using the same logic as in the CachedManager.
             # (Assuming lookups are done using pk/id/uuid)

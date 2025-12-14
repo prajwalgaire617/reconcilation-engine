@@ -623,7 +623,6 @@ class ExtendedRelayConnection(graphene.relay.Connection):
     """
     Adds total_count and edge_count to Graphene Relay connections.
     """
-
     class Meta:
         abstract = True
 
