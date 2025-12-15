@@ -19,6 +19,8 @@ from location.models import Location
 from location.test_helpers import create_test_health_facility
 from uuid import uuid4
 import datetime
+from django.core.exceptions import ValidationError, PermissionDenied
+
 
 
 def create_test_language(code="en", name="English", sort_order=1, custom_props=None):
@@ -105,6 +107,10 @@ def create_test_interactive_user(
     custom_props=None,
 ):
     cache.clear()
+    # to ensure the resource could be saved
+    admin = User.objects.filter(i_user_id=1).first()
+    if not admin:
+        User.objects.create(username="Admin", i_user_id=1)
     if custom_props is None:
         custom_props = {}
     else:
@@ -155,7 +161,11 @@ def create_test_interactive_user(
         for key, value in custom_props.items():
             if hasattr(i_user, key):
                 setattr(i_user, key, value)
-        i_user.save()
+        try:
+            i_user.save()
+        except ValidationError:
+            # unchanged
+            pass
         user = User.objects.filter(i_user=i_user, *User.filter_validity()).first()
         # Update existing user if found and if there are custom props for User model
         if user:
@@ -191,7 +201,11 @@ def create_test_interactive_user(
     else:
         user.save()
     i_user.set_password(password, private_key=i_user.private_key)
-    i_user.save()
+    try:
+        i_user.save()
+    except ValidationError:
+        # unchanged
+        pass
     create_or_update_user_roles(i_user, roles, None)
     set_current_user(user)
     return user

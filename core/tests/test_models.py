@@ -10,13 +10,13 @@ class UserTestCase(TestCase):
         )
         self.assertTrue(always_valid.is_active)
 
-        from core import datetime, datetimedelta
+        import datetime
 
         not_yet_active = User(
             username="not_yet_active",
             t_user=TechnicalUser(
                 username="not_yet_active",
-                validity_from=datetime.datetime.now() + datetimedelta(days=1),
+                validity_from=datetime.datetime.now() + datetime.timedelta(days=1),
             ),
         )
         self.assertFalse(not_yet_active.is_active)
@@ -25,7 +25,7 @@ class UserTestCase(TestCase):
             username="not_active_anymore",
             t_user=TechnicalUser(
                 username="not_active_anymore",
-                validity_to=datetime.datetime.now() + datetimedelta(days=-1),
+                validity_to=datetime.datetime.now() + datetime.timedelta(days=-1),
             ),
         )
         self.assertFalse(not_active_anymore.is_active)
@@ -36,22 +36,23 @@ class UserTestCase(TestCase):
         )
         self.assertTrue(always_valid.is_active)
 
-        from core import datetime, datetimedelta
-
-        not_yet_active = User(
-            username="always_valid",
-            i_user=InteractiveUser(
-                login_name="not_yet_active",
-                validity_from=datetime.datetime.now() + datetimedelta(days=1),
-            ),
-        )
-        self.assertFalse(not_yet_active.is_active)
+        import datetime
+        # user is not business history yet
+        # not_yet_active = User(
+        #     username="always_valid",
+        #     i_user=InteractiveUser(
+        #         login_name="not_yet_active",
+        #         validity_from=datetime.datetime.now() + datetime.timedelta(days=1),
+        #     ),
+        # )
+        # self.assertFalse(not_yet_active.is_active)
 
         not_active_anymore = User(
             username="always_valid",
             i_user=InteractiveUser(
                 login_name="not_active_anymore",
-                validity_to=datetime.datetime.now() + datetimedelta(days=-1),
+                active=False,
+                date_deactivated=datetime.datetime.now() + datetime.timedelta(days=-1),
             ),
         )
         self.assertFalse(not_active_anymore.is_active)
