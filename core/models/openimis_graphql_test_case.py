@@ -167,10 +167,14 @@ class openIMISGraphQLTestCase(GraphQLTestCase):
                 {{
                     node
                     {{
-                        id,status,error,{
-                            'clientMutationId,' if not internal
-                            else ''
-                        }clientMutationLabel,clientMutationDetails,requestDateTime,jsonExt
+                        id,
+                        status,
+                        error,
+                        {'clientMutationId,' if not internal else ''}
+                        clientMutationLabel,
+                        clientMutationDetails,
+                        requestDateTime,
+                        jsonExt
                     }}
                 }}
                 }}
