@@ -226,8 +226,6 @@ def create_or_update_core_user(
     else:
         user = None
         created = False
-
-
     if not user:
         user = User(username=username)
         created = True

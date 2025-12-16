@@ -19,8 +19,7 @@ from location.models import Location
 from location.test_helpers import create_test_health_facility
 from uuid import uuid4
 import datetime
-from django.core.exceptions import ValidationError, PermissionDenied
-
+from django.core.exceptions import ValidationError
 
 
 def create_test_language(code="en", name="English", sort_order=1, custom_props=None):
@@ -56,6 +55,7 @@ def create_test_language(code="en", name="English", sort_order=1, custom_props=N
 
     return Language.objects.create(**language_data)
 
+
 def create_test_officer(valid=True, custom_props=None, villages=[]):
     if custom_props is None:
         custom_props = {}
@@ -83,7 +83,7 @@ def create_test_officer(valid=True, custom_props=None, villages=[]):
         qs_eo = qs_eo.filter(uuid=uuid)
     elif code:
         qs_eo = qs_eo.filter(code=code)
- 
+
     if code or uuid:
         eo = qs_eo.first()
     if eo:
@@ -105,9 +105,9 @@ def create_test_interactive_user(
     password="admin123",
     roles=None,
     custom_props=None,
+    **kwargs
 ):
-    cache.clear()
-        
+
     if custom_props is None:
         custom_props = {}
     else:
@@ -165,6 +165,11 @@ def create_test_interactive_user(
             pass
         user = User.objects.filter(i_user=i_user, *User.filter_validity()).first()
         # Update existing user if found and if there are custom props for User model
+        if not user:
+            user = User.objects.filter(username=username, *User.filter_validity()).first()
+            if user:
+                user.i_user = i_user
+
         if user:
             user_props = {k: v for k, v in custom_props.items() if hasattr(User, k)}
             if user_props:
@@ -190,19 +195,24 @@ def create_test_interactive_user(
             )
 
     if not user:
-        user = User.objects.create(
+        user = User(
             username=username,
             i_user=i_user,
         )
-    else:
+    try:
         user.save()
+    except ValidationError:
+        # unchanged
+        pass
     i_user.set_password(password, private_key=i_user.private_key)
     try:
         i_user.save()
     except ValidationError:
         # unchanged
         pass
+
     create_or_update_user_roles(i_user, roles, None)
+    cache.clear()
     set_current_user(user)
     return user
 
@@ -413,9 +423,9 @@ def create_test_role(perm_names, name=None, is_system=0, is_blocked=False, custo
     right_ids = []
     for perm_name in perm_names:
         if perm_name not in flat_perms:
-             raise Exception(f"Permission {perm_name} not found")
+            raise Exception(f"Permission {perm_name} not found")
         right_ids.extend(flat_perms[perm_name])
-    
+
     # Remove duplicates
     right_ids = list(set(right_ids))
     # Create the role
@@ -429,7 +439,8 @@ def create_test_role(perm_names, name=None, is_system=0, is_blocked=False, custo
     }
 
     role = Role.objects.create(**role_data)
-
+    cache.clear()
+    RoleRight.objects.filter(role=role).delete()
     # Create role rights
     for right_id in right_ids:
         RoleRight.objects.create(

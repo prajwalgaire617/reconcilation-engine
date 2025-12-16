@@ -5,7 +5,7 @@ from core.models.user import User
 
 from dataclasses import dataclass
 from graphql_jwt.shortcuts import get_token
-from datetime import datetime
+
 
 @dataclass
 class DummyContext:

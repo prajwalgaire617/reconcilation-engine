@@ -1,11 +1,5 @@
 import unittest
 from unittest.mock import patch, MagicMock
-import sys
-import os
-
-
-from django.conf import settings
-
 
 from core.test_helpers import create_test_role
 

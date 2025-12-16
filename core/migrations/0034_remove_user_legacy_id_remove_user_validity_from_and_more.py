@@ -26,7 +26,7 @@ class Migration(migrations.Migration):
             model_name="user",
             name="validity_to",
         ),
-        
+
         migrations.AddField(
             model_name="user",
             name="date_created",
@@ -46,6 +46,11 @@ class Migration(migrations.Migration):
                 related_name="%(class)s_user_created",
                 to=settings.AUTH_USER_MODEL,
             ),
+        ),
+        migrations.AddField(
+            model_name="user",
+            name="version",
+            field=models.IntegerField(default=1),
         ),
         migrations.AddField(
             model_name="user",
@@ -73,6 +78,7 @@ class Migration(migrations.Migration):
                     models.DateTimeField(default=datetime.datetime.now, null=True),
                 ),
                 ("username", models.CharField(db_index=True, max_length=50)),
+                ('version', models.IntegerField(default=1)),
                 ("history_id", models.AutoField(primary_key=True, serialize=False)),
                 ("history_date", models.DateTimeField(db_index=True)),
                 ("history_change_reason", models.CharField(max_length=100, null=True)),
@@ -166,7 +172,7 @@ class Migration(migrations.Migration):
                 "get_latest_by": ("history_date", "history_id"),
             },
             bases=(simple_history.models.HistoricalChanges, models.Model),
-        ),        
+        ),
         migrations.RemoveField(
             model_name="historicalinteractiveuser",
             name="audit_user_id",

@@ -7,11 +7,12 @@ from django.db.models import (
     BigAutoField, JSONField, deletion,
 )
 from simple_history.models import HistoricalRecords
-
+from django.conf import settings
 from core.utils import CachedManager, CachedModelMixin, filter_validity as core_filter_validity, get_current_user
 from django.apps import apps
 
-class OpenIMISHistoryMixin(DirtyFieldsMixin, Model):
+
+class OpenIMISHistoryMixin(DirtyFieldsMixin, CachedModelMixin, Model):
     date_created = DateTimeField(null=True, default=py_datetime.now)
     date_updated = DateTimeField(null=True, default=py_datetime.now)
     user_created = ForeignKey(
@@ -29,7 +30,8 @@ class OpenIMISHistoryMixin(DirtyFieldsMixin, Model):
     history = HistoricalRecords(
         inherit=True,
     )
-    
+    version = IntegerField(default=1)
+
     def save_history(self):
         pass
 
@@ -106,8 +108,10 @@ class OpenIMISHistoryMixin(DirtyFieldsMixin, Model):
                     user_id = 1
             if not user:
                 user = apps.get_model('core', 'User').objects.filter(i_user_id=user_id).first()
+            if not user and not settings.IS_TESTING:
+                user = get_current_user()
         return user
-    
+
     def delete(self, *args, user=None, username=None, **kwargs):
         user = self.get_user(user=user, username=username)
         if not self.is_dirty(check_relationship=True) and getattr(self, 'active', True):
@@ -160,7 +164,7 @@ class OpenIMISHistoryMixin(DirtyFieldsMixin, Model):
         abstract = True
 
 
-class OpenIMISModel(OpenIMISHistoryMixin, CachedModelMixin, Model):
+class OpenIMISModel(OpenIMISHistoryMixin):
     @staticmethod
     def filter_validity(arg="validity", prefix="", **kwargs):
         validity = kwargs.get(arg, None)
@@ -181,12 +185,9 @@ class OpenIMISModel(OpenIMISHistoryMixin, CachedModelMixin, Model):
     json_ext = JSONField(db_column="Json_ext", blank=True, null=True)
     date_deactivated = DateTimeField(null=True, default=None)
 
-    version = IntegerField(default=1)
-
-
     def set_uuid(self):
         self.uuid = uuid.uuid4()
-    
+
     def set_pk(self):
         # done automatically
         pass

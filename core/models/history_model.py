@@ -4,17 +4,13 @@ from copy import copy
 from datetime import datetime as py_datetime
 from django.core.cache import caches
 import datetime as base_datetime
-from dirtyfields import DirtyFieldsMixin
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.db.models import F
-from simple_history.models import HistoricalRecords
-from core.utils import CachedManager, CachedModelMixin, get_current_user
+from core.utils import CachedManager
 from .openimis_model import OpenIMISHistoryMixin
-# from core.datetimes.ad_datetime import datetime as py_datetime
 
 from ..fields import DateTimeField
-#from .user import User
 
 logger = logging.getLogger(__name__)
 
@@ -45,7 +41,7 @@ class HistoryModelManager(CachedManager):
         return super().get(*args, **kwargs)
 
 
-class HistoryModel(OpenIMISHistoryMixin, CachedModelMixin, models.Model):
+class HistoryModel(OpenIMISHistoryMixin):
     id = models.UUIDField(
         primary_key=True, db_column="UUID", default=None, editable=False
     )
@@ -85,15 +81,13 @@ class HistoryModel(OpenIMISHistoryMixin, CachedModelMixin, models.Model):
     @property
     def active(self):
         return not self.is_deleted
-    
+
     @active.setter
     def active(self, value):
         self.is_deleted = not value
 
-
     def set_pk(self):
         self.pk = uuid.uuid4()
-
 
     @classmethod
     def filter_queryset(cls, queryset=None):

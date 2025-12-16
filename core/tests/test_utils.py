@@ -6,7 +6,7 @@ from django.db.models import Q
 
 from core.utils import (
     full_class_name, comparable, to_json_safe_value,
-    to_list_permissions, filter_validity, collect_all_gql_permissions
+    to_list_permissions, collect_all_gql_permissions
 )
 from core.datetimes.ad_datetime import AdDate, AdDatetime
 from core.test_helpers import create_test_interactive_user

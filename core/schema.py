@@ -1745,8 +1745,6 @@ class CreateUserMutation(OpenIMISMutation):
                 raise ValidationError("User with this user name already exists.")
             if not user.has_perms(CoreConfig.gql_mutation_create_users_perms):
                 raise PermissionDenied("unauthorized")
-            from core.utils import TimeUtils
-
             update_or_create_user(data, user)
             return None
         except ValidationError as ve:
@@ -1776,7 +1774,6 @@ class UpdateUserMutation(OpenIMISMutation):
                 raise PermissionDenied(_("mutation.authentication_required"))
             if not user.has_perms(CoreConfig.gql_mutation_update_users_perms):
                 raise PermissionDenied("unauthorized")
-            from core.utils import TimeUtils
             update_or_create_user(data, user)
 
             return None

@@ -57,8 +57,8 @@ class Migration(migrations.Migration):
     # tblLogins might need to be emptied first
 
     dependencies = [
-         ("core", "0032_remove_interactiveuser_legacy_id_and_more"),
-         ("location", "0014_add_missing_fields_to_django_scheme"),
+        ("core", "0032_remove_interactiveuser_legacy_id_and_more"),
+        ("location", "0014_add_missing_fields_to_django_scheme"),
     ]
 
     operations = [

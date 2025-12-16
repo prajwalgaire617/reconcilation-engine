@@ -23,6 +23,7 @@ class BaseTestContext:
     cookies = None
     jwt = None
     user = None
+
     def __init__(self, user=None, method="GET", path="/", data=None, headers=None):
         """
         Initialize a test context with realistic request attributes.
@@ -98,7 +99,6 @@ class BaseTestContext:
             )
             self.META["HTTP_COOKIE"] = cookie_string
 
-
     def update_meta(self, key, value):
         """Utility method to update META dictionary."""
         self.META[key] = value
@@ -127,12 +127,12 @@ class openIMISGraphQLTestCase(GraphQLTestCase):
         with transaction.atomic():
             super()._execute_test()
 
-    # def run(self, result=None):
-    #     """
-    #     Override run() to ensure atomic block even when pytest-django calls it.
-    #     """
-    #     with transaction.atomic():
-    #         super().run(result)
+    def run(self, result=None):
+        """
+        Override run() to ensure atomic block even when pytest-django calls it.
+        """
+        with transaction.atomic():
+            super().run(result)
 
     @classmethod
     def setUpClass(cls):

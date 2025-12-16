@@ -577,7 +577,7 @@ class CachedModelMixin:
 
     class Meta:
         abstract = True
- 
+
 
 class ExtendedConnection(graphene.Connection):
     """

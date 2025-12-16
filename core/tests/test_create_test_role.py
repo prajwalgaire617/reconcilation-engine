@@ -1,6 +1,6 @@
 from django.test import TestCase
 from core.test_helpers import create_test_role
-from core.models import Role
+
 
 class CreateTestRoleTest(TestCase):
     def test_create_test_role_success(self):

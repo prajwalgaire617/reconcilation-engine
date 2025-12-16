@@ -22,7 +22,7 @@ from secrets import token_hex
 from django.contrib.auth.password_validation import validate_password
 from ..utils import CachedManager
 from .base import ExtendableModel, Language, UUIDModel
-from .versioned_model import UUIDVersionedModel, VersionedModel
+from .versioned_model import VersionedModel
 from .openimis_model import OpenIMISMigrationModel, OpenIMISHistoryMixin  # , OpenIMISModel
 from core.utils import to_list_permissions
 from rest_framework import exceptions
@@ -350,7 +350,7 @@ class InteractiveUser(OpenIMISMigrationModel):
             cache.set("is_admin_" + str(self.id), is_admin, 600)
         return is_admin
 
-    def set_password(self, raw_password, private_key=token_hex(128)):     
+    def set_password(self, raw_password, private_key=token_hex(128)):
         validate_password(raw_password)
         self.private_key = private_key
         pwd_hash = sha256()
@@ -635,7 +635,7 @@ class UserRole(VersionedModel):
 
 
 class User(UUIDModel, OpenIMISHistoryMixin, PermissionsMixin):
-    
+
     USE_CACHE = not settings.IS_TESTING
     objects = CachedManager()
     username = models.CharField(unique=True, max_length=50)
@@ -677,7 +677,7 @@ class User(UUIDModel, OpenIMISHistoryMixin, PermissionsMixin):
         # self.validity_to = now
         # self.save()
         pass
-    
+
     @property
     def _u(self):
         return self.i_user or self.officer or self.claim_admin or self.t_user
@@ -698,7 +698,7 @@ class User(UUIDModel, OpenIMISHistoryMixin, PermissionsMixin):
 
     @property
     def id_for_audit(self):
-        return self._u.id
+        return self.i_user_id or -1
 
     @property
     def last_login(self):
