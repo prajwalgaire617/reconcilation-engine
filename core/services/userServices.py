@@ -21,7 +21,7 @@ from django.db.models import Q
 logger = logging.getLogger(__file__)
 
 
-def create_or_update_interactive_user(user_id, data, audit_user_id, connected):
+def create_or_update_interactive_user(user_id, data, user_maker, connected):
     admin = User.objects.filter(i_user_id=1).first()
     if not admin:
         User.objects.create(username="Admin", i_user_id=1)
@@ -35,7 +35,6 @@ def create_or_update_interactive_user(user_id, data, audit_user_id, connected):
         "health_facility_id": "health_facility_id",
     }
     data_subset = {v: data.get(k) for k, v in i_fields.items()}
-    data_subset["audit_user_id"] = audit_user_id
     data_subset["is_associated"] = connected
     if user_id:
         # TODO we might want to update a user that has been deleted. Use Legacy ID ?
@@ -63,11 +62,11 @@ def create_or_update_interactive_user(user_id, data, audit_user_id, connected):
             i_user.stored_password = CoreConfig.locked_user_password_hash
         created = True
 
-    i_user.save()
-    create_or_update_user_roles(i_user, data["roles"], audit_user_id)
+    i_user.save(user=user_maker)
+    create_or_update_user_roles(i_user, data["roles"], user_maker.id_for_audit)
     if "districts" in data:
         create_or_update_user_districts(
-            i_user, data["districts"], data_subset["audit_user_id"]
+            i_user, data["districts"], user_maker.id_for_audit
         )
     cache.delete("cs_InteractiveUserSerializer_" + str(i_user.id))
     return i_user, created
@@ -214,7 +213,7 @@ def create_or_update_claim_admin(user_id, data, audit_user_id, connected):
 
 
 def create_or_update_core_user(
-    user_uuid, username, i_user=None, t_user=None, officer=None, claim_admin=None
+    user_uuid, username, i_user=None, t_user=None, officer=None, claim_admin=None, user=None
 ):
     if user_uuid:
         # This intentionally fails if the provided uuid doesn't exist as we don't want clients to set it
@@ -228,12 +227,7 @@ def create_or_update_core_user(
         user = None
         created = False
 
-    if user and user.i_user and i_user:
-        if user.i_user != i_user:
-            from core import datetime
-            now = datetime.datetime.now()
-            user.validity_from = now
-            user.validity_to = None
+
     if not user:
         user = User(username=username)
         created = True
@@ -247,7 +241,7 @@ def create_or_update_core_user(
         user.officer = officer
     if claim_admin:
         user.claim_admin = claim_admin
-    user.save()
+    user.save(user=user)
     return user, created
 
 

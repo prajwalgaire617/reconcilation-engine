@@ -127,12 +127,12 @@ class openIMISGraphQLTestCase(GraphQLTestCase):
         with transaction.atomic():
             super()._execute_test()
 
-    def run(self, result=None):
-        """
-        Override run() to ensure atomic block even when pytest-django calls it.
-        """
-        with transaction.atomic():
-            super().run(result)
+    # def run(self, result=None):
+    #     """
+    #     Override run() to ensure atomic block even when pytest-django calls it.
+    #     """
+    #     with transaction.atomic():
+    #         super().run(result)
 
     @classmethod
     def setUpClass(cls):

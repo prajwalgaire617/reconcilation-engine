@@ -23,7 +23,7 @@ from django.contrib.auth.password_validation import validate_password
 from ..utils import CachedManager
 from .base import ExtendableModel, Language, UUIDModel
 from .versioned_model import UUIDVersionedModel, VersionedModel
-from .openimis_model import OpenIMISMigrationModel  # , OpenIMISModel
+from .openimis_model import OpenIMISMigrationModel, OpenIMISHistoryMixin  # , OpenIMISModel
 from core.utils import to_list_permissions
 from rest_framework import exceptions
 
@@ -206,7 +206,6 @@ class InteractiveUser(OpenIMISMigrationModel):
     last_login = models.DateTimeField(db_column="LastLogin", null=True, blank=True)
     health_facility_id = models.IntegerField(db_column="HFID", blank=True, null=True)
 
-    audit_user_id = models.IntegerField(db_column="AuditUserID")
     # dummy_pwd is always blank. It is actually a transient field used in the Legacy to pass the clear text password in
     # a User object from the ASPX to the DAL where it is processed into/against password and private key/salt)
     # dummy_pwd = models.CharField(db_column='DummyPwd', max_length=25, blank=True, null=True)
@@ -635,9 +634,10 @@ class UserRole(VersionedModel):
         db_table = "tblUserRole"
 
 
-class User(UUIDModel, PermissionsMixin, UUIDVersionedModel):
+class User(UUIDModel, OpenIMISHistoryMixin, PermissionsMixin):
+    
     USE_CACHE = not settings.IS_TESTING
-
+    objects = CachedManager()
     username = models.CharField(unique=True, max_length=50)
     t_user = models.ForeignKey(
         TechnicalUser, on_delete=models.CASCADE, blank=True, null=True
@@ -657,6 +657,11 @@ class User(UUIDModel, PermissionsMixin, UUIDVersionedModel):
 
     objects = UserManager()
 
+    @staticmethod
+    def filter_validity(arg="validity", prefix="", **kwargs):
+        return {}
+        return {}
+
     def check_password(self, *args, **kwargs):
         if self._u:
             return self._u.check_password(*args, **kwargs)
@@ -667,11 +672,12 @@ class User(UUIDModel, PermissionsMixin, UUIDVersionedModel):
         pass
 
     def delete_history(self, **kwargs):
-        now = py_datetime.now()
-        self.validity_from = now
-        self.validity_to = now
-        self.save()
-
+        # now = py_datetime.now()
+        # self.validity_from = now
+        # self.validity_to = now
+        # self.save()
+        pass
+    
     @property
     def _u(self):
         return self.i_user or self.officer or self.claim_admin or self.t_user

@@ -8,29 +8,10 @@ from django.db.models import (
 )
 from simple_history.models import HistoricalRecords
 
-from core.utils import CachedManager, CachedModelMixin, filter_validity as core_filter_validity
+from core.utils import CachedManager, CachedModelMixin, filter_validity as core_filter_validity, get_current_user
 from django.apps import apps
 
-
-class OpenIMISModel(DirtyFieldsMixin, CachedModelMixin, Model):
-    def filter_validity(arg="validity", prefix="", **kwargs):
-        validity = kwargs.get(arg, None)
-        if not validity:
-            return Q(active=True)
-        else:
-            return Q(active=False) | Q(date_deactivated__gte=validity)
-
-    objects = CachedManager()
-    id = BigAutoField(
-        primary_key=True, auto_created=True, editable=False
-    )
-    uuid = UUIDField(
-        unique=True, db_column="UUID", default=uuid.uuid4, editable=False
-    )
-    active = BooleanField(default=True)
-
-    json_ext = JSONField(db_column="Json_ext", blank=True, null=True)
-    date_deactivated = DateTimeField(null=True, default=None)
+class OpenIMISHistoryMixin(DirtyFieldsMixin, Model):
     date_created = DateTimeField(null=True, default=py_datetime.now)
     date_updated = DateTimeField(null=True, default=py_datetime.now)
     user_created = ForeignKey(
@@ -45,14 +26,10 @@ class OpenIMISModel(DirtyFieldsMixin, CachedModelMixin, Model):
         on_delete=deletion.DO_NOTHING,
         null=True,
     )
-    version = IntegerField(default=1)
     history = HistoricalRecords(
         inherit=True,
     )
-
-    def set_uuid(self):
-        self.uuid = uuid.uuid4()
-
+    
     def save_history(self):
         pass
 
@@ -71,11 +48,12 @@ class OpenIMISModel(DirtyFieldsMixin, CachedModelMixin, Model):
 
     def save(self, *args, user=None, username=None, **kwargs):
         # get the user data so as to assign later his uuid id in fields user_updated etc
-        user = self.get_user(user=None, username=None)
+        user = self.get_user(user=user, username=username)
         now = py_datetime.now()
         # check if object has been newly created
         if self.id is None:
             # save the new object
+            self.set_pk()
             self.user_created = user
             self.date_created = now
             self.date_updated = now
@@ -121,18 +99,18 @@ class OpenIMISModel(DirtyFieldsMixin, CachedModelMixin, Model):
         if not user:
             user_id = 1
             if username:
-                user = apps.get_model('core', 'User').objects.get(username=username)
+                user = apps.get_model('core', 'User').objects.filter(username=username).first()
             elif self.__class__.__name__ != 'InteractiveUser' and getattr(self, 'audit_user_id', None):
                 user_id = getattr(self, 'audit_user_id', None)
                 if user_id == -1:
                     user_id = 1
-
-            user = apps.get_model('core', 'User').objects.get(i_user_id=user_id)
+            if not user:
+                user = apps.get_model('core', 'User').objects.filter(i_user_id=user_id).first()
         return user
-
+    
     def delete(self, *args, user=None, username=None, **kwargs):
-        user = self.get_user(user=None, username=None)
-        if not self.is_dirty(check_relationship=True) and self.active:
+        user = self.get_user(user=user, username=username)
+        if not self.is_dirty(check_relationship=True) and getattr(self, 'active', True):
             now = py_datetime.now()
             self.date_updated = now
             self.user_updated = user
@@ -148,7 +126,7 @@ class OpenIMISModel(DirtyFieldsMixin, CachedModelMixin, Model):
                 if replaced_entity:
                     replaced_entity.replacement_uuid = None
                     replaced_entity.save(user=user)
-            result = super(OpenIMISModel, self).save(*args, **kwargs)
+            result = super().save(*args, **kwargs)
             return result
         else:
             raise ValidationError(
@@ -178,11 +156,46 @@ class OpenIMISModel(DirtyFieldsMixin, CachedModelMixin, Model):
 
         return new_instance
 
+    class Meta:
+        abstract = True
+
+
+class OpenIMISModel(OpenIMISHistoryMixin, CachedModelMixin, Model):
+    @staticmethod
+    def filter_validity(arg="validity", prefix="", **kwargs):
+        validity = kwargs.get(arg, None)
+        if not validity:
+            return Q(active=True)
+        else:
+            return Q(active=False) | Q(date_deactivated__gte=validity)
+
+    objects = CachedManager()
+    id = BigAutoField(
+        primary_key=True, auto_created=True, editable=False
+    )
+    uuid = UUIDField(
+        unique=True, db_column="UUID", default=uuid.uuid4, editable=False
+    )
+    active = BooleanField(default=True)
+
+    json_ext = JSONField(db_column="Json_ext", blank=True, null=True)
+    date_deactivated = DateTimeField(null=True, default=None)
+
+    version = IntegerField(default=1)
+
+
+    def set_uuid(self):
+        self.uuid = uuid.uuid4()
+    
+    def set_pk(self):
+        # done automatically
+        pass
+
     @classmethod
     def filter_queryset(cls, queryset=None):
         if queryset is None:
-            queryset = cls.objects.all()
-        queryset = queryset.filter()
+            queryset = cls.objects.filter(active=True)
+        queryset = queryset.filter(active=True)
         return queryset
 
     class Meta:
@@ -206,6 +219,7 @@ class OpenIMISMigrationModel(OpenIMISModel):
     validity_from = DateTimeField(db_column="ValidityFrom", default=py_datetime.now, null=True)
     validity_to = DateTimeField(db_column="ValidityTo", blank=True, null=True, default=None)
 
+    @staticmethod
     def filter_validity(arg="validity", prefix="", **kwargs):
         return core_filter_validity(arg, prefix, **kwargs)
 

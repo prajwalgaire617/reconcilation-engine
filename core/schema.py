@@ -1586,7 +1586,6 @@ class UpdateRoleMutation(OpenIMISMutation):
                 raise ValidationError("There is no uuid in updateMutation input!")
             if check_role_unique_name(data.get("name", None), data["uuid"]):
                 raise ValidationError("mutation.duplicate_of_role_name")
-            data["audit_user_id"] = user.id_for_audit
             update_or_create_role(data, user)
             return None
         except Exception as exc:
@@ -1741,15 +1740,13 @@ class CreateUserMutation(OpenIMISMutation):
             if type(user) is AnonymousUser or not user.id:
                 raise PermissionDenied(_("mutation.authentication_required"))
             if User.objects.filter(
-                username=data["username"], validity_to__isnull=True
+                username=data["username"], *User.filter_validity()
             ).exists():
                 raise ValidationError("User with this user name already exists.")
             if not user.has_perms(CoreConfig.gql_mutation_create_users_perms):
                 raise PermissionDenied("unauthorized")
             from core.utils import TimeUtils
 
-            data["validity_from"] = TimeUtils.now()
-            data["audit_user_id"] = user.id_for_audit
             update_or_create_user(data, user)
             return None
         except ValidationError as ve:
@@ -1780,9 +1777,6 @@ class UpdateUserMutation(OpenIMISMutation):
             if not user.has_perms(CoreConfig.gql_mutation_update_users_perms):
                 raise PermissionDenied("unauthorized")
             from core.utils import TimeUtils
-
-            data["validity_from"] = TimeUtils.now()
-            data["audit_user_id"] = user.id_for_audit
             update_or_create_user(data, user)
 
             return None
@@ -1902,7 +1896,7 @@ def update_or_create_user(data, user):
 
     if UT_INTERACTIVE in data["user_types"]:
         i_user, i_user_created = create_or_update_interactive_user(
-            user_uuid, data, user.id_for_audit, len(data["user_types"]) > 1
+            user_uuid, data, user, len(data["user_types"]) > 1
         )
     else:
         i_user = None
@@ -1938,6 +1932,7 @@ def update_or_create_user(data, user):
         i_user=i_user,
         officer=officer,
         claim_admin=claim_admin,
+        user=user
     )
 
     if client_mutation_id:

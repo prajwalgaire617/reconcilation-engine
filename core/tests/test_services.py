@@ -18,7 +18,7 @@ from core.services import (
 from django.test import TestCase
 from location.models import OfficerVillage
 from location.test_helpers import create_test_village, create_test_health_facility
-
+from core.test_helpers import create_test_interactive_user
 logger = logging.getLogger(__file__)
 postgresql = "postgresql"
 PASSWORD = "FoBoar72!"
@@ -48,6 +48,7 @@ class UserServicesTest(TestCase):
         # Create test health facility
         self.test_hf = create_test_health_facility()
         self.test_hf2 = create_test_health_facility()
+        self.user = create_test_interactive_user()
 
     def test_iuser_min(self):
         roles = [11]
@@ -61,7 +62,7 @@ class UserServicesTest(TestCase):
                 roles=roles,
                 language="en",
             ),
-            audit_user_id=999,
+            user_maker=self.user,
             connected=False,
         )
         self.assertTrue(created)
@@ -93,7 +94,7 @@ class UserServicesTest(TestCase):
                 health_facility_id=self.test_hf.id,
                 password=PASSWORD,
             ),
-            audit_user_id=999,
+            user_maker=self.user,
             connected=False,
         )
         self.assertTrue(created)
@@ -134,7 +135,7 @@ class UserServicesTest(TestCase):
                 health_facility_id=self.test_hf.id,
                 password=PASSWORD,
             ),
-            audit_user_id=999,
+            user_maker=self.user,
             connected=False,
         )
         self.assertTrue(created)
@@ -169,7 +170,7 @@ class UserServicesTest(TestCase):
                 health_facility_id=self.test_hf2.id,
                 password=f"{PASSWORD}updated",
             ),
-            audit_user_id=111,
+            user_maker=self.user,
             connected=False,
         )
         self.assertFalse(created2)
@@ -213,7 +214,7 @@ class UserServicesTest(TestCase):
                 roles=roles,
                 language="fr",
             ),
-            audit_user_id=999,
+            user_maker=self.user,
             connected=False,
         )
         self.assertTrue(created)
@@ -229,7 +230,7 @@ class UserServicesTest(TestCase):
                 language="en",
                 roles=roles,
             ),
-            audit_user_id=111,
+            user_maker=self.user,
             connected=False,
         )
         self.assertFalse(created2)
@@ -474,7 +475,7 @@ class UserServicesTest(TestCase):
                 health_facility_id=1,
                 password=PASSWORD,
             ),
-            audit_user_id=999,
+            user_maker=self.user,
             connected=False,
         )
         self.assertTrue(created)
@@ -513,7 +514,7 @@ class UserServicesTest(TestCase):
                 health_facility_id=1,
                 password=PASSWORD,
             ),
-            audit_user_id=999,
+            user_maker=self.user,
             connected=False,
         )
         self.assertTrue(created)

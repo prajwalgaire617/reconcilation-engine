@@ -575,6 +575,9 @@ class CachedModelMixin:
             cache.delete(cache_key)
             logger.debug(f"Removed instance from cache: {cache_key}")
 
+    class Meta:
+        abstract = True
+ 
 
 class ExtendedConnection(graphene.Connection):
     """

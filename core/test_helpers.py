@@ -107,10 +107,7 @@ def create_test_interactive_user(
     custom_props=None,
 ):
     cache.clear()
-    # to ensure the resource could be saved
-    admin = User.objects.filter(i_user_id=1).first()
-    if not admin:
-        User.objects.create(username="Admin", i_user_id=1)
+        
     if custom_props is None:
         custom_props = {}
     else:
@@ -187,7 +184,6 @@ def create_test_interactive_user(
                     "last_name": "TestLastName",
                     "other_names": "Test Other Names",
                     "login_name": username,
-                    "audit_user_id": -1,
                     "role_id": roles[0],
                     **custom_props,
                 }

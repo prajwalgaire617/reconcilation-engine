@@ -1,7 +1,7 @@
 # flake8: noqa
 from django.apps import apps
 from django.core.exceptions import ObjectDoesNotExist
-from django.db.models import Q
+from django.db.models import Q, F
 from django.db.models.functions import Coalesce
 from django.utils.translation import gettext as _
 from core.models import InteractiveUser, Officer
@@ -3306,7 +3306,8 @@ def fetch_entity_data(
     data = []
     try:
         manager = apps.get_model(MODULE_MAPPING[requested_entity], requested_entity)
-        # TODO : prepare a mapping of the list of fields that are needed for each entity -> use .only(list) ?
+        
+        # Build base validity filters (unchanged)
         filters = (
             Q(validity_to__lte=report_params["date_to"])
             & Q(validity_to__gte=report_params["date_from"])
@@ -3315,27 +3316,42 @@ def fetch_entity_data(
             & Q(validity_from__lte=report_params["date_to"])
             & Q(validity_from__gte=report_params["date_from"])
         )
-        if user_id != ALL_USERS:
-            filters &= Q(audit_user_id=user_id)
+
+        # Determine which fields actually exist and collect OR filters + name field
+        user_filters = Q()
+        model_fields = {
+            f.name for f in manager.model._meta.get_fields() 
+        }
+
+        qs = manager.objects.filter(filters)
+        if "audit_user_id" in model_fields:
+            user_filters |= Q(**{"audit_user_id": user_id})
+        if "user_updated" in model_fields:
+            user_filters |= Q(**{"user_updated__i_user_id": user_id})
+            qs = qs.annotate(audit_user_id=F("user_updated__i_user_id"))
+
+        # Apply user filter only if not ALL_USERS and at least one field was found
+        if user_id != ALL_USERS and user_filters:
+            filters &= user_filters
+    
+        if "validity_to" in model_fields:
+            qs = qs.annotate(order_date=Coalesce("validity_to", "validity_from"))
+        else:
+            qs = qs.annotate(order_date=F("date_updated"))\
+            .annotate(validity_to=F("date_updated"))\
+            .annotate(validity_from=None)
+        
         elements = (
-            manager.objects.filter(filters)
-            .annotate(order_date=Coalesce("validity_to", "validity_from"))
-            .order_by("order_date", "-id")
+            qs.order_by("order_date", "-id")
         )
 
         known_legacy_ids = set()
-
         for element in elements:
-
             action_type = determine_action_type(
                 element.id, element.validity_to, element.legacy_id, known_legacy_ids
             )
-            if (
-                action_type != report_params["action"]
-                and report_params["action"] != ACTION_ALL
-            ):
+            if action_type != report_params["action"] and report_params["action"] != ACTION_ALL:
                 continue
-
             new_data_element = {
                 "entity": requested_entity,
                 "action": action_type,
@@ -3350,10 +3366,7 @@ def fetch_entity_data(
         return True, data
 
     except LookupError:
-        if trigger_missing_entity_error:
-            return False, data
-
-    return False, data
+        return False, data
 
 
 def map_user_ids_to_user_names():
