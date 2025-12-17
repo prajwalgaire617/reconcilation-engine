@@ -18,7 +18,14 @@ from core.services import (
 from django.test import TestCase
 from location.models import OfficerVillage
 from location.test_helpers import create_test_village, create_test_health_facility
-from core.test_helpers import create_test_interactive_user
+from core.test_helpers import (
+    create_test_interactive_user,
+    create_manager_role,
+    create_enrolment_officer_role,
+    create_claim_admin_role,
+    create_accountant_role,
+    create_admin_role,
+)
 logger = logging.getLogger(__file__)
 postgresql = "postgresql"
 PASSWORD = "FoBoar72!"
@@ -51,7 +58,8 @@ class UserServicesTest(TestCase):
         self.user = create_test_interactive_user()
 
     def test_iuser_min(self):
-        roles = [11]
+        admin_role_id = create_admin_role().id
+        roles = [admin_role_id]
         username = "tstsvciu1"
         i_user, created = create_or_update_interactive_user(
             user_id=None,
@@ -71,7 +79,7 @@ class UserServicesTest(TestCase):
         self.assertEquals(i_user.last_name, "Last Name CIU1")
         self.assertEquals(i_user.other_names, "Other 1 2 3")
         self.assertEquals(i_user.user_roles.count(), 1)
-        self.assertEquals(i_user.user_roles.first().role_id, 11)
+        self.assertEquals(i_user.user_roles.first().role_id, admin_role_id)
         self.assertEquals(i_user.language.code, "en")
 
         UserRole.objects.filter(user_id=i_user.id).delete()
@@ -79,7 +87,7 @@ class UserServicesTest(TestCase):
         logger.info(f"Deleted {deleted_users} users after test")
 
     def test_iuser_max(self):
-        roles = [11, 12]
+        roles = [create_manager_role().id, create_enrolment_officer_role().id]
         username = "tstsvciu2"
         i_user, created = create_or_update_interactive_user(
             user_id=None,
@@ -119,8 +127,8 @@ class UserServicesTest(TestCase):
         logger.info(f"Deleted {deleted_users} users after test")
 
     def test_iuser_update(self):
-        roles = [11, 12]
-        roles2 = [8, 11]
+        roles = [create_manager_role().id, create_enrolment_officer_role().id]
+        roles2 = [create_accountant_role().id, create_claim_admin_role().id]
         username = "tstsvciu2"
         i_user, created = create_or_update_interactive_user(
             user_id=None,
@@ -203,7 +211,7 @@ class UserServicesTest(TestCase):
         """
         This tests the update of a user without specifying a userId but with a username
         """
-        roles = [11, 12]
+        roles = [create_manager_role().id, create_enrolment_officer_role().id]
         username = "tstsvciu3"
         i_user, created = create_or_update_interactive_user(
             user_id=None,
@@ -460,7 +468,7 @@ class UserServicesTest(TestCase):
     def test_user_reset_password(self):
         from django.core import mail
 
-        roles = [11, 12]
+        roles = [create_manager_role().id, create_enrolment_officer_role().id]
         username = "user_reset"
         i_user, created = create_or_update_interactive_user(
             user_id=None,
@@ -499,7 +507,7 @@ class UserServicesTest(TestCase):
         i_user.delete()
 
     def test_user_set_password(self):
-        roles = [11, 12]
+        roles = [create_manager_role().id, create_enrolment_officer_role().id]
         username = "user_set"
         i_user, created = create_or_update_interactive_user(
             user_id=None,

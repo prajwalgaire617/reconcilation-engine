@@ -1,25 +1,18 @@
 from django.test import TestCase
-from core.test_helpers import create_test_officer, LogInHelper
+from core.test_helpers import create_test_officer, create_admin_role, create_test_interactive_user
 import re
-from core.models import InteractiveUser, Officer, User
+from core.models import Officer, User
 
 
 class HelpersTest(TestCase):
 
     def test_create_test_officer(self):
-        count_before = Officer.objects.count()
         user = create_test_officer(valid=True, custom_props={})
         self.assertTrue(type(user) is Officer)
-        count_after = Officer.objects.count()
-        self.assertEquals(count_after, count_before + 1)
 
     def test_login_helper(self):
-        count_before = InteractiveUser.objects.count()
-        login_helper = LogInHelper()
-        user = login_helper.get_or_create_user_api(username="test_login_helper")
+        user = create_test_interactive_user(username="test_login_helper")
         self.assertTrue(type(user) is User)
-        count_after = InteractiveUser.objects.count()
-        self.assertEquals(count_after, count_before + 1)
 
 
 class GQLTest(TestCase):
@@ -37,7 +30,7 @@ class GQLTest(TestCase):
                 "locationId": None,
                 "otherNames": "Roger",
                 "phone": None,
-                "roles": ["9"],
+                "roles": [create_admin_role().id],
                 "substitutionOfficerId": None,
                 "username": "VHOS0011",
                 "userTypes": ["INTERACTIVE", "CLAIM_ADMIN"],

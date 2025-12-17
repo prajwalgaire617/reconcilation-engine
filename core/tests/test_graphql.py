@@ -3,7 +3,7 @@ from core.models.openimis_graphql_test_case import (
     BaseTestContext,
 )
 from core.models import Language
-from core.test_helpers import create_test_interactive_user
+from core.test_helpers import create_test_interactive_user, create_admin_role
 from location.models import Location
 import json
 
@@ -139,7 +139,7 @@ class gqlTest(openIMISGraphQLTestCase):
                 "districts": [self.disctict.id],
                 "locationId": None,
                 "language": "en",
-                "roles": ["1"],
+                "roles": [create_admin_role().id],
                 "substitutionOfficerId": None,
                 "clientMutationLabel": "Create user",
                 "clientMutationId": "95b431f3-0c12-40ad-bc01-51034702366d",

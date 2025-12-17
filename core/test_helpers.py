@@ -127,29 +127,7 @@ def create_test_interactive_user(
         del custom_props["language_id"]
     if roles is None:
         # Create a test role with default permissions instead of hardcoded role IDs
-        default_perm_names = [
-            "gql_query_roles_perms",
-            "gql_mutation_create_roles_perms",
-            "gql_mutation_update_roles_perms",
-            "gql_mutation_replace_roles_perms",
-            "gql_mutation_duplicate_roles_perms",
-            "gql_mutation_delete_roles_perms",
-            "gql_query_users_perms",
-            "gql_query_users_profile_perms",
-            "gql_mutation_create_users_perms",
-            "gql_mutation_update_users_perms",
-            "gql_mutation_delete_users_perms",
-            "gql_query_enrolment_officers_perms",
-            "gql_mutation_create_enrolment_officers_perms",
-            "gql_mutation_update_enrolment_officers_perms",
-            "gql_mutation_delete_enrolment_officers_perms",
-            "gql_query_claim_administrator_perms",
-            "gql_mutation_create_claim_administrator_perms",
-            "gql_mutation_update_claim_administrator_perms",
-            "gql_mutation_delete_claim_administrator_perms",
-        ]
-        test_role = create_test_role(perm_names=default_perm_names, name="TestInteractiveUserRole")
-        roles = [1, test_role.id]
+        roles = [create_admin_role().id]
     user = None
     i_user = InteractiveUser.objects.filter(login_name=username, *InteractiveUser.filter_validity()).first()
 
@@ -451,6 +429,12 @@ def create_test_role(perm_names, name=None, is_system=0, is_blocked=False, custo
         )
 
     return role
+
+
+def create_admin_role(name="IMIS Administrator", is_system=0, is_blocked=False, custom_props=None):
+    is_system = 64
+    perm_names = []
+    return create_test_role(perm_names, name=name, is_system=is_system, is_blocked=is_blocked, custom_props=custom_props)
 
 
 def create_manager_role():
