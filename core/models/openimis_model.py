@@ -8,8 +8,69 @@ from django.db.models import (
 )
 from simple_history.models import HistoricalRecords
 from django.conf import settings
-from core.utils import CachedManager, CachedModelMixin, filter_validity as core_filter_validity, get_current_user
+from core.utils import CachedManager, CachedModelMixin, filter_validity as core_filter_validity, get_current_user, uuidv7
 from django.apps import apps
+from simple_history.utils import bulk_create_with_history, bulk_update_with_history, get_history_manager_for_model
+
+
+class HistoryCacheManager(CachedManager):
+    @staticmethod
+    def get_user(user=None, username=None):
+        if not user:
+            user_id = 1
+            if username:
+                user = apps.get_model('core', 'User').objects.filter(username=username).first()
+            if not user and not settings.IS_TESTING:
+                user = get_current_user()
+        return user
+    
+    
+    exclude_fields = {'id', 'uuid', 'date_created', 'user_created', 'date_updated',
+                        'user_updated', 'version'}
+    
+    def bulk_create(self, objs, user=None, username=None, **kwargs):
+        user = self.get_user(user=user, username=username)
+        now = py_datetime.now()
+        for obj in objs:
+            obj.set_pk()
+            obj.user_created = user
+            obj.date_created = now
+            obj.date_updated = now
+            obj.user_updated = user
+            obj.version = 1
+        updated_row = super().bulk_create(objs, **kwargs)
+        self.model.bulk_update_cache(updated_row)
+        history_manager = get_history_manager_for_model(self.model)
+        history_manager.bulk_history_create(
+            objs,
+            batch_size=kwargs.get('batch_size', None),
+            update=True,
+            default_user=user,
+            default_date=now,
+        )
+        return updated_row
+
+
+    def bulk_update(self, objs, fields, user=None, username=None, **kwargs):
+        now = py_datetime.now()
+        user = self.get_user(user=user, username=username)
+        for obj in objs:
+            obj.date_updated = now
+            obj.user_updated = user
+            obj.version += 1
+        
+        field_to_update = [field for field in fields if field not in self.exclude_fields]  + ['date_updated', 'user_updated', 'version']
+        updated_row = super().bulk_create(objs, field_to_update, **kwargs)
+        self.model.bulk_update_cache(updated_row)
+        history_manager.bulk_history_create(
+            objs,
+            batch_size=kwargs.get('batch_size', None),
+            update=True,
+            default_user=user,
+            default_date=now,
+        ) 
+        return updated_row
+         
 
 
 class OpenIMISHistoryMixin(DirtyFieldsMixin, CachedModelMixin, Model):
@@ -102,7 +163,7 @@ class OpenIMISHistoryMixin(DirtyFieldsMixin, CachedModelMixin, Model):
             user_id = 1
             if username:
                 user = apps.get_model('core', 'User').objects.filter(username=username).first()
-            elif self.__class__.__name__ != 'InteractiveUser' and getattr(self, 'audit_user_id', None):
+            elif getattr(self, 'audit_user_id', None):
                 user_id = getattr(self, 'audit_user_id', None)
                 if user_id == -1:
                     user_id = 1
@@ -160,6 +221,7 @@ class OpenIMISHistoryMixin(DirtyFieldsMixin, CachedModelMixin, Model):
 
         return new_instance
 
+
     class Meta:
         abstract = True
 
@@ -173,12 +235,12 @@ class OpenIMISModel(OpenIMISHistoryMixin):
         else:
             return Q(active=False) | Q(date_deactivated__gte=validity)
 
-    objects = CachedManager()
+    objects = HistoryCacheManager()
     id = BigAutoField(
         primary_key=True, auto_created=True, editable=False
     )
     uuid = UUIDField(
-        unique=True, db_column="UUID", default=uuid.uuid4, editable=False
+        unique=True, db_column="UUID", default=uuidv7, editable=False
     )
     active = BooleanField(default=True)
 
@@ -186,7 +248,7 @@ class OpenIMISModel(OpenIMISHistoryMixin):
     date_deactivated = DateTimeField(null=True, default=None)
 
     def set_uuid(self):
-        self.uuid = uuid.uuid4()
+        self.uuid = uuidv7
 
     def set_pk(self):
         # done automatically

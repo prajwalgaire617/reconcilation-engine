@@ -540,8 +540,76 @@ def clean_fk(instance):
     return field_values
 
 
+def uuidv7() -> uuid.UUID:
+    """
+    Generate a UUIDv7.
+    """
+    # random bytes
+    value = bytearray(os.urandom(16))
+
+    # current timestamp in ms
+    timestamp = int(time.time() * 1000)
+
+    # timestamp
+    value[0] = (timestamp >> 40) & 0xFF
+    value[1] = (timestamp >> 32) & 0xFF
+    value[2] = (timestamp >> 24) & 0xFF
+    value[3] = (timestamp >> 16) & 0xFF
+    value[4] = (timestamp >> 8) & 0xFF
+    value[5] = timestamp & 0xFF
+
+    # version and variant
+    value[6] = (value[6] & 0x0F) | 0x70
+    value[8] = (value[8] & 0x3F) | 0x80
+
+    return uuid.UUID(bytes=bytes(value))
+
+
 class CachedModelMixin:
     USE_CACHE = settings.CACHE_OBJECT_DEFAULT
+    UNIQUE_FIELDS = {"id", "uuid", "pk"}
+    @classmethod
+    def bulk_update_cache(cls, objs):
+        """
+        Efficiently update caches for a list of updated objects after bulk_update.
+        Call this manually after your manager's bulk_update if needed,
+        or integrate into the manager method.
+        """
+        if not cls.USE_CACHE or not objs:
+            return
+
+        now = settings.CACHE_OBJECT_TTL  # or None for no timeout
+
+        # Get unique fields once
+        unique_fields = getattr(cls, "UNIQUE_FIELDS" )
+
+        # Primary caches: key(pk) -> full cleaned object
+        primary_data = {}
+        for obj in objs:
+            if obj.pk:
+                primary_data[get_cache_key(cls, obj.pk)] = clean_fk(obj)
+
+        if primary_data:
+            cache.set_many(primary_data, timeout=now)
+
+        # Secondary caches: key(field_value) -> pk  (only if value != pk)
+        secondary_data = {}
+        for obj in objs:
+            if not obj.pk:
+                continue
+            for f in unique_fields:
+                try:
+                    val = getattr(obj, f)
+                except AttributeError:
+                    continue  # skip if field doesn't exist (e.g. property)
+                if val != obj.pk:  # your original condition
+                    key = get_cache_key(cls, val)
+                    secondary_data[key] = obj.pk
+
+        if secondary_data:
+            cache.set_many(secondary_data, timeout=now)
+
+        logger.debug("Bulk cached %d instances of %s", len(objs), cls.__name__)
 
     def update_cache(self):
         """
@@ -554,7 +622,7 @@ class CachedModelMixin:
                 timeout=settings.CACHE_OBJECT_TTL,
             )
             unique_fields = getattr(
-                self.__class__.objects, "UNIQUE_FIELDS", {"id", "uuid", "pk"}
+                self, "UNIQUE_FIELDS", {"id", "uuid", "pk"}
             )
             for f in unique_fields:
                 # get_field raised an error on property raise

@@ -5,9 +5,9 @@ from datetime import datetime as py_datetime
 from django.core.cache import caches
 import datetime as base_datetime
 from django.core.exceptions import ValidationError
-from django.db import models
+from django.db import models, transaction
 from django.db.models import F
-from core.utils import CachedManager
+from core.utils import CachedManager, uuidv7
 from .openimis_model import OpenIMISHistoryMixin
 
 from ..fields import DateTimeField
@@ -87,7 +87,7 @@ class HistoryModel(OpenIMISHistoryMixin):
         self.is_deleted = not value
 
     def set_pk(self):
-        self.pk = uuid.uuid4()
+        self.pk = uuidv7()
 
     @classmethod
     def filter_queryset(cls, queryset=None):
@@ -95,6 +95,81 @@ class HistoryModel(OpenIMISHistoryMixin):
             queryset = cls.objects.filter(is_deleted=False)
         queryset = queryset.filter(is_deleted=False)
         return queryset
+
+    @classmethod
+    def bulk_save(cls, data_list, user, batch_size=100):
+        """
+        Efficiently update or create multiple instances based on 'id' field.
+        All operations are atomic - either all succeed or all fail.
+
+        Args:
+            data_list: List of dicts with instance data (with or without 'id')
+            user: User performing the operation
+            batch_size: Number of records to process per batch
+
+        Returns:
+            dict with 'created' and 'updated' counts
+        """
+        if not data_list:
+            return {'created': 0, 'updated': 0}
+
+        now = py_datetime.now()
+
+        ids_to_update = [d['id'] for d in data_list if d.get('id')]
+
+        existing = {obj.id: obj for obj in cls.objects.filter(id__in=ids_to_update, is_deleted=False)}
+
+        to_create = []
+        to_update = []
+
+        exclude_fields = {'id', 'uuid', 'date_created', 'user_created', 'date_updated',
+                         'user_updated', 'version', 'is_deleted', 'date_valid_from',
+                         'date_valid_to', 'replacement_uuid'}
+
+        for data in data_list:
+            record_id = data.get('id')
+
+            if record_id and record_id in existing:
+                instance = existing[record_id]
+                for field, value in data.items():
+                    if field not in exclude_fields:
+                        setattr(instance, field, value)
+                instance.user_updated = user
+                instance.date_updated = now
+                instance.version = instance.version + 1
+                to_update.append(instance)
+            else:
+                create_data = {k: v for k, v in data.items() if k not in exclude_fields}
+                instance = cls(**create_data)
+                instance.set_pk()
+                instance.user_created = user
+                instance.user_updated = user
+                instance.date_created = now
+                instance.date_updated = now
+                instance.version = 1
+                to_create.append(instance)
+
+        with transaction.atomic():
+            created_count = 0
+            updated_count = 0
+
+            if to_create:
+                
+                created = bulk_create_with_history(to_create, cls, batch_size=batch_size, default_user=user)
+                self.bulk_update_cache(created)
+                created_count = len(to_create)
+
+            if to_update:
+                
+                update_fields = [f for f in to_update[0].__dict__.keys()
+                                if not f.startswith('_') and f not in exclude_fields]
+                update_fields += ['user_updated', 'date_updated', 'version']
+
+                updated = bulk_update_with_history(to_update, cls, update_fields, batch_size=batch_size, default_user=user)
+                self.bulk_update_cache(to_update)
+                updated_count = len(to_update)
+
+        return {'created': created_count, 'updated': updated_count}
 
     class Meta:
         abstract = True
