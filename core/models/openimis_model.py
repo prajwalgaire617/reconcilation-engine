@@ -1,4 +1,3 @@
-import uuid
 from datetime import datetime as py_datetime
 from dirtyfields import DirtyFieldsMixin
 from django.core.exceptions import ValidationError
@@ -10,24 +9,24 @@ from simple_history.models import HistoricalRecords
 from django.conf import settings
 from core.utils import CachedManager, CachedModelMixin, filter_validity as core_filter_validity, get_current_user, uuidv7
 from django.apps import apps
-from simple_history.utils import bulk_create_with_history, bulk_update_with_history, get_history_manager_for_model
+from simple_history.utils import get_history_manager_for_model
 
 
 class HistoryCacheManager(CachedManager):
     @staticmethod
     def get_user(user=None, username=None):
         if not user:
-            user_id = 1
             if username:
                 user = apps.get_model('core', 'User').objects.filter(username=username).first()
             if not user and not settings.IS_TESTING:
                 user = get_current_user()
         return user
-    
-    
-    exclude_fields = {'id', 'uuid', 'date_created', 'user_created', 'date_updated',
-                        'user_updated', 'version'}
-    
+
+    exclude_fields = {
+        'id', 'uuid', 'date_created', 'user_created', 'date_updated',
+        'user_updated', 'version'
+    }
+
     def bulk_create(self, objs, user=None, username=None, **kwargs):
         user = self.get_user(user=user, username=username)
         now = py_datetime.now()
@@ -50,7 +49,6 @@ class HistoryCacheManager(CachedManager):
         )
         return updated_row
 
-
     def bulk_update(self, objs, fields, user=None, username=None, **kwargs):
         now = py_datetime.now()
         user = self.get_user(user=user, username=username)
@@ -58,19 +56,19 @@ class HistoryCacheManager(CachedManager):
             obj.date_updated = now
             obj.user_updated = user
             obj.version += 1
-        
-        field_to_update = [field for field in fields if field not in self.exclude_fields]  + ['date_updated', 'user_updated', 'version']
-        updated_row = super().bulk_create(objs, field_to_update, **kwargs)
-        self.model.bulk_update_cache(updated_row)
+
+        field_to_update = [field for field in fields if field not in self.exclude_fields] + ['date_updated', 'user_updated', 'version']
+        super().bulk_update(objs, field_to_update, **kwargs)
+        updated_count = self.model.bulk_update_cache(objs)
+        history_manager = get_history_manager_for_model(self.model)
         history_manager.bulk_history_create(
             objs,
             batch_size=kwargs.get('batch_size', None),
             update=True,
             default_user=user,
             default_date=now,
-        ) 
-        return updated_row
-         
+        )
+        return updated_count
 
 
 class OpenIMISHistoryMixin(DirtyFieldsMixin, CachedModelMixin, Model):
@@ -220,7 +218,6 @@ class OpenIMISHistoryMixin(DirtyFieldsMixin, CachedModelMixin, Model):
                     setattr(new_instance, field.name, getattr(self, field.name))
 
         return new_instance
-
 
     class Meta:
         abstract = True

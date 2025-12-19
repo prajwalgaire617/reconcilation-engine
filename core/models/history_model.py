@@ -1,4 +1,3 @@
-import uuid
 import logging
 from copy import copy
 from datetime import datetime as py_datetime
@@ -9,6 +8,7 @@ from django.db import models, transaction
 from django.db.models import F
 from core.utils import CachedManager, uuidv7
 from .openimis_model import OpenIMISHistoryMixin
+from simple_history.utils import bulk_update_with_history, bulk_create_with_history
 
 from ..fields import DateTimeField
 
@@ -122,9 +122,11 @@ class HistoryModel(OpenIMISHistoryMixin):
         to_create = []
         to_update = []
 
-        exclude_fields = {'id', 'uuid', 'date_created', 'user_created', 'date_updated',
-                         'user_updated', 'version', 'is_deleted', 'date_valid_from',
-                         'date_valid_to', 'replacement_uuid'}
+        exclude_fields = {
+            'id', 'uuid', 'date_created', 'user_created', 'date_updated',
+            'user_updated', 'version', 'is_deleted', 'date_valid_from',
+            'date_valid_to', 'replacement_uuid'
+        }
 
         for data in data_list:
             record_id = data.get('id')
@@ -154,20 +156,18 @@ class HistoryModel(OpenIMISHistoryMixin):
             updated_count = 0
 
             if to_create:
-                
                 created = bulk_create_with_history(to_create, cls, batch_size=batch_size, default_user=user)
-                self.bulk_update_cache(created)
-                created_count = len(to_create)
+                cls.bulk_update_cache(created)
+                created_count = len(created)
 
             if to_update:
-                
-                update_fields = [f for f in to_update[0].__dict__.keys()
-                                if not f.startswith('_') and f not in exclude_fields]
+                update_fields = [
+                    f for f in to_update[0].__dict__.keys()
+                    if not f.startswith('_') and f not in exclude_fields
+                ]
                 update_fields += ['user_updated', 'date_updated', 'version']
-
-                updated = bulk_update_with_history(to_update, cls, update_fields, batch_size=batch_size, default_user=user)
-                self.bulk_update_cache(to_update)
-                updated_count = len(to_update)
+                updated_count = bulk_update_with_history(to_update, cls, update_fields, batch_size=batch_size, default_user=user)
+                cls.bulk_update_cache(to_update)
 
         return {'created': created_count, 'updated': updated_count}
 

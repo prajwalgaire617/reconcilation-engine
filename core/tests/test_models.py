@@ -92,7 +92,7 @@ class UserTestCase(TestCase):
             secondary_cache_key = get_cache_key(InteractiveUser, user.login_name.lower())
             secondary_cached = cache.get(secondary_cache_key)
             self.assertIsNotNone(secondary_cached, f"Secondary cache not updated for user {user.login_name}")
-            self.assertEqual(secondary_cached, str(user.id))
+            self.assertEqual(secondary_cached, user.id)
 
         # Test bulk_update
         users_to_update = created_users[:2]  # Update first 2 users
@@ -130,8 +130,10 @@ class UserTestCase(TestCase):
             # Should have at least 1 historical record (creation)
             # and updated users should have 2 (creation + update)
             expected_history = 2 if user in users_to_update else 1
-            self.assertEqual(historical_count, expected_history,
-                           f"User {user.login_name} should have {expected_history} historical records")
+            self.assertEqual(
+                historical_count, expected_history,
+                f"User {user.login_name} should have {expected_history} historical records"
+            )
 
         # Clean up
         test_user.delete()

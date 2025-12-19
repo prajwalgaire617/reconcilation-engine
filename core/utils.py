@@ -24,6 +24,9 @@ from functools import lru_cache
 import threading
 from django.db import transaction
 # from simple_history.utils import update_change_reason
+import time
+import os
+
 
 _request_local = threading.local()
 
@@ -568,6 +571,7 @@ def uuidv7() -> uuid.UUID:
 class CachedModelMixin:
     USE_CACHE = settings.CACHE_OBJECT_DEFAULT
     UNIQUE_FIELDS = {"id", "uuid", "pk"}
+
     @classmethod
     def bulk_update_cache(cls, objs):
         """
@@ -581,7 +585,7 @@ class CachedModelMixin:
         now = settings.CACHE_OBJECT_TTL  # or None for no timeout
 
         # Get unique fields once
-        unique_fields = getattr(cls, "UNIQUE_FIELDS" )
+        unique_fields = getattr(cls, "UNIQUE_FIELDS")
 
         # Primary caches: key(pk) -> full cleaned object
         primary_data = {}
