@@ -90,11 +90,11 @@ class AbsStrategy(object, metaclass=abc.ABCMeta):
 
     @classmethod
     def get_supports_advanced_criteria(cls):
-        return getattr(type(cls), '_supports_advanced_criteria', True)
+        return getattr(cls, '_supports_advanced_criteria', True)
 
     @classmethod
     def set_supports_advanced_criteria(cls, val):
-        type(cls)._supports_advanced_criteria = val
+        cls._supports_advanced_criteria = val
 
     supports_advanced_criteria = property(get_supports_advanced_criteria, set_supports_advanced_criteria)
 
