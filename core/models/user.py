@@ -826,22 +826,22 @@ class User(UUIDModel, OpenIMISHistoryMixin, PermissionsMixin):
     def save(self, *args, **kwargs):
         if self.i_user:
             try:
-                self.i_user.save(*args, **kwargs)
+                self.i_user.save()
             except Exception as e:
                 logger.debug(f"cannot save i_user: {e}")
         if self.officer:
             try:
-                self.officer.save(*args, **kwargs)
+                self.officer.save()
             except Exception as e:
                 logger.debug(f"cannot save officer {e}")
         if self.claim_admin:
             try:
-                self.claim_admin.save(*args, **kwargs)
+                self.claim_admin.save()
             except Exception as e:
                 logger.debug(f"cannot save claim_admin {e}")
         if self.t_user:
             try:
-                self.t_user.save(*args, **kwargs)
+                self.t_user.save()
             except Exception as e:
                 logger.debug(f"cannot save t_user {e}")
         super().save(*args, **kwargs)

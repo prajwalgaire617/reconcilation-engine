@@ -63,7 +63,7 @@ class UserTestCase(TestCase):
 
         # Perform bulk create
         InteractiveUser.USE_CACHE = True
-        InteractiveUser.objects.bulk_create(users_to_create, user=test_user)
+        InteractiveUser.objects.bulk_create(users_to_create)
 
         # Retrieve created users from database
         created_users = []
@@ -76,10 +76,6 @@ class UserTestCase(TestCase):
         for i, user in enumerate(created_users, 1):
             self.assertEqual(user.login_name, f"bulk_user_{i}")
             self.assertEqual(user.version, 1)
-            self.assertIsNotNone(user.user_created)
-            self.assertIsNotNone(user.date_created)
-            self.assertEqual(user.user_updated, user.user_created)
-            self.assertEqual(user.date_updated, user.date_created)
 
         # Verify cache was updated for created users
         for user in created_users:
@@ -104,7 +100,7 @@ class UserTestCase(TestCase):
             user.email = f"updated_user{i}@example.com"
 
         # Perform bulk update
-        InteractiveUser.objects.bulk_update(users_to_update, update_fields, user=test_user)
+        InteractiveUser.objects.bulk_update(users_to_update, update_fields)
 
         # Refresh from database and verify updates
         for i, user in enumerate(users_to_update):
@@ -112,8 +108,6 @@ class UserTestCase(TestCase):
             self.assertEqual(user.phone, f"123-456-789{i}")
             self.assertEqual(user.email, f"updated_user{i}@example.com")
             self.assertEqual(user.version, 2)  # Version should be incremented
-            self.assertIsNotNone(user.date_updated)
-            self.assertIsNotNone(user.user_updated)
 
         # Verify cache was updated after bulk update
         for user in users_to_update:

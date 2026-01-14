@@ -227,3 +227,60 @@ class gqlTest(openIMISGraphQLTestCase):
             query, headers={"HTTP_AUTHORIZATION": f"Bearer {self.admin_token}"}
         )
         self.assertResponseNoErrors(response)
+
+    def test_user_modification_creates_history_with_user(self):
+        """Test that user modification via GraphQL creates history record with user included for audit"""
+        from core.models import InteractiveUser
+
+        # Get initial history count for the admin user
+        initial_history_count = self.admin_user.i_user.history.count()
+
+        # Change the user's language via GraphQL
+        query = """
+            mutation {
+                changeUserLanguage(
+                    input: {
+                        clientMutationId: "test-history-audit",
+                        clientMutationLabel: "Test User History Audit",
+                        languageId: "fr"
+                    }
+                ) {
+                    clientMutationId
+                    internalId
+                }
+            }
+        """
+        response = self.query(
+            query, headers={"HTTP_AUTHORIZATION": f"Bearer {self.admin_token}"}
+        )
+        self.assertResponseNoErrors(response)
+
+        # Check that history record was created
+        final_history_count = self.admin_user.i_user.history.count()
+        self.assertEqual(
+            final_history_count,
+            initial_history_count + 1,
+            "History record should have been created for user modification"
+        )
+
+        # Get the latest history record
+        latest_history = self.admin_user.i_user.history.first()  # Ordered by -history_date, -history_id
+
+        # Verify that the history record contains the user who made the change
+        self.assertIsNotNone(
+            latest_history.history_user,
+            "History record should contain the user who made the change"
+        )
+        self.assertEqual(
+            latest_history.history_user.id,
+            self.admin_user.id,
+            "History record should reference the correct user who made the change"
+        )
+
+        # Verify that the language was actually changed
+        self.admin_user.i_user.refresh_from_db()
+        self.assertEqual(
+            self.admin_user.i_user.language.code,
+            "fr",
+            "User language should have been changed to French"
+        )

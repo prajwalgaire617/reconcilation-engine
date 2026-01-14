@@ -7,35 +7,21 @@ from django.db.models import (
 )
 from simple_history.models import HistoricalRecords
 from django.conf import settings
-from core.utils import CachedManager, CachedModelMixin, filter_validity as core_filter_validity, get_current_user, uuidv7
+from core.utils import CachedManager, CachedModelMixin, filter_validity as core_filter_validity, uuidv7  
 from django.apps import apps
 from simple_history.utils import get_history_manager_for_model
 
 
 class HistoryCacheManager(CachedManager):
-    @staticmethod
-    def get_user(user=None, username=None):
-        if not user:
-            if username:
-                user = apps.get_model('core', 'User').objects.filter(username=username).first()
-            if not user and not settings.IS_TESTING:
-                user = get_current_user()
-        return user
 
     exclude_fields = {
-        'id', 'uuid', 'date_created', 'user_created', 'date_updated',
-        'user_updated', 'version'
+        'id', 'uuid', 'version'
     }
 
-    def bulk_create(self, objs, user=None, username=None, **kwargs):
-        user = self.get_user(user=user, username=username)
+    def bulk_create(self, objs, user=None, **kwargs):
         now = py_datetime.now()
         for obj in objs:
             obj.set_pk()
-            obj.user_created = user
-            obj.date_created = now
-            obj.date_updated = now
-            obj.user_updated = user
             obj.version = 1
         updated_row = super().bulk_create(objs, **kwargs)
         self.model.bulk_update_cache(updated_row)
@@ -44,20 +30,16 @@ class HistoryCacheManager(CachedManager):
             objs,
             batch_size=kwargs.get('batch_size', None),
             update=True,
-            default_user=user,
             default_date=now,
+            default_user=user
         )
         return updated_row
 
-    def bulk_update(self, objs, fields, user=None, username=None, **kwargs):
+    def bulk_update(self, objs, fields, user=None, **kwargs):
         now = py_datetime.now()
-        user = self.get_user(user=user, username=username)
         for obj in objs:
-            obj.date_updated = now
-            obj.user_updated = user
             obj.version += 1
-
-        field_to_update = [field for field in fields if field not in self.exclude_fields] + ['date_updated', 'user_updated', 'version']
+        field_to_update = [field for field in fields if field not in self.exclude_fields] + ['version']
         super().bulk_update(objs, field_to_update, **kwargs)
         updated_count = self.model.bulk_update_cache(objs)
         history_manager = get_history_manager_for_model(self.model)
@@ -65,27 +47,13 @@ class HistoryCacheManager(CachedManager):
             objs,
             batch_size=kwargs.get('batch_size', None),
             update=True,
-            default_user=user,
             default_date=now,
+            default_user=user
         )
         return updated_count
 
 
 class OpenIMISHistoryMixin(DirtyFieldsMixin, CachedModelMixin, Model):
-    date_created = DateTimeField(null=True, default=py_datetime.now)
-    date_updated = DateTimeField(null=True, default=py_datetime.now)
-    user_created = ForeignKey(
-        "core.User",
-        related_name="%(class)s_user_created",
-        on_delete=deletion.DO_NOTHING,
-        null=True,
-    )
-    user_updated = ForeignKey(
-        "core.User",
-        related_name="%(class)s_user_updated",
-        on_delete=deletion.DO_NOTHING,
-        null=True,
-    )
     history = HistoricalRecords(
         inherit=True,
     )
@@ -94,7 +62,7 @@ class OpenIMISHistoryMixin(DirtyFieldsMixin, CachedModelMixin, Model):
     def save_history(self):
         pass
 
-    def update(self, *args, user=None, username=None, save=True, **kwargs):
+    def update(self, *args, save=True, **kwargs):
         """
         Overrides the default update to update the cache after saving the instance.
         """
@@ -104,37 +72,22 @@ class OpenIMISHistoryMixin(DirtyFieldsMixin, CachedModelMixin, Model):
             kwargs = {}
         [setattr(self, key, obj_data[key]) for key in obj_data]
         if save:
-            self.save(*args, user=user, username=user, **kwargs)
+            self.save(*args, **kwargs)
         return self
 
-    def save(self, *args, user=None, username=None, **kwargs):
-        # get the user data so as to assign later his uuid id in fields user_updated etc
-        user = self.get_user(user=user, username=username)
+    def save(self, *args, user=None, **kwargs):
+        # get the user data so as to assign later his uuid id in fields 
         now = py_datetime.now()
+        if user:
+            self._history_user = user
         # check if object has been newly created
         if self.id is None:
             # save the new object
             self.set_pk()
-            self.user_created = user
-            self.date_created = now
-            self.date_updated = now
-            self.user_updated = user
             result = super().save(*args, **kwargs)
             self.update_cache()
             return result
         if self.is_dirty(check_relationship=True):
-            if not self.user_created:
-                # past = self.objects.filter(pk=self.id).first()
-                # if not past:
-                self.user_created = user
-                self.date_created = now
-                # TODO this could erase a instance, version check might be too light
-                # elif not self.version == past.version:
-                #     raise ValidationError(
-                #         "Record has not be updated - the version don't match with existing record"
-                #     )
-            self.date_updated = now
-            self.user_updated = user
             self.version = self.version + 1
             # check if we have business model
             if hasattr(self, "replacement_uuid"):
@@ -156,29 +109,12 @@ class OpenIMISHistoryMixin(DirtyFieldsMixin, CachedModelMixin, Model):
     def delete_history(self):
         pass
 
-    def get_user(self, user=None, username=None):
-        if not user:
-            user_id = 1
-            if username:
-                user = apps.get_model('core', 'User').objects.filter(username=username).first()
-            elif getattr(self, 'audit_user_id', None):
-                user_id = getattr(self, 'audit_user_id', None)
-                if user_id == -1:
-                    user_id = 1
-            if not user:
-                user = apps.get_model('core', 'User').objects.filter(i_user_id=user_id).first()
-            if not user and not settings.IS_TESTING:
-                user = get_current_user()
-        return user
-
-    def delete(self, *args, user=None, username=None, **kwargs):
-        user = self.get_user(user=user, username=username)
+    def delete(self, *args, user=None, **kwargs):
         if not self.is_dirty(check_relationship=True) and getattr(self, 'active', True):
-            now = py_datetime.now()
-            self.date_updated = now
-            self.user_updated = user
             self.version = self.version + 1
             self.active = False
+            if user:
+                self._history_user = user
             # check if we have business model
             if hasattr(self, "replacement_uuid"):
                 # When a replacement entity is deleted, the link should be removed
@@ -219,11 +155,6 @@ class OpenIMISHistoryMixin(DirtyFieldsMixin, CachedModelMixin, Model):
 
         return new_instance
 
-    class Meta:
-        abstract = True
-
-
-class OpenIMISModel(OpenIMISHistoryMixin):
     @staticmethod
     def filter_validity(arg="validity", prefix="", **kwargs):
         validity = kwargs.get(arg, None)
@@ -231,6 +162,12 @@ class OpenIMISModel(OpenIMISHistoryMixin):
             return Q(active=True)
         else:
             return Q(active=False) | Q(date_deactivated__gte=validity)
+
+    class Meta:
+        abstract = True
+
+
+class OpenIMISModel(OpenIMISHistoryMixin):
 
     objects = HistoryCacheManager()
     id = BigAutoField(

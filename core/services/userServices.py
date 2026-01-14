@@ -62,7 +62,7 @@ def create_or_update_interactive_user(user_id, data, user_maker, connected):
             i_user.stored_password = CoreConfig.locked_user_password_hash
         created = True
 
-    i_user.save(user=user_maker)
+    i_user.save()
     create_or_update_user_roles(i_user, data["roles"], user_maker.id_for_audit)
     if "districts" in data:
         create_or_update_user_districts(
@@ -239,7 +239,7 @@ def create_or_update_core_user(
         user.officer = officer
     if claim_admin:
         user.claim_admin = claim_admin
-    user.save(user=user)
+    user.save()
     return user, created
 
 

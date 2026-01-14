@@ -292,7 +292,7 @@ class OpenIMISMutation(graphene.relay.ClientIDMutation):
                                 coerced_list.append(item)
                         elif (
                             inner_type.__class__
-                            == graphene.utils.subclass_with_meta.SubclassWithMeta_Meta
+                            == graphene.utils.subclass_with_meta.SubclassWithMeta_Meta and getattr(inner_type._meta, 'name', '') != "Int"
                         ):
                             coerced_list.append(
                                 cls.coerce_mutation_data(item, input_class=inner_type)

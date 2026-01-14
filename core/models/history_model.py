@@ -6,11 +6,16 @@ import datetime as base_datetime
 from django.core.exceptions import ValidationError
 from django.db import models, transaction
 from django.db.models import F
-from core.utils import CachedManager, uuidv7
-from .openimis_model import OpenIMISHistoryMixin
+from dirtyfields import DirtyFieldsMixin
+from core.utils import CachedManager, CachedModelMixin, filter_validity as core_filter_validity, uuidv7  
 from simple_history.utils import bulk_update_with_history, bulk_create_with_history
-
+from django.db.models import (
+    Q, UUIDField, DateTimeField, BooleanField, Model, IntegerField, ForeignKey,
+    BigAutoField, JSONField, deletion,
+)
+from simple_history.models import HistoricalRecords
 from ..fields import DateTimeField
+from django.apps import apps
 
 logger = logging.getLogger(__name__)
 
@@ -41,7 +46,13 @@ class HistoryModelManager(CachedManager):
         return super().get(*args, **kwargs)
 
 
-class HistoryModel(OpenIMISHistoryMixin):
+class HistoryModel(DirtyFieldsMixin, CachedModelMixin, Model):
+    history = HistoricalRecords(
+        inherit=True,
+    )
+    version = IntegerField(default=1)
+
+    
     id = models.UUIDField(
         primary_key=True, db_column="UUID", default=None, editable=False
     )
@@ -170,6 +181,134 @@ class HistoryModel(OpenIMISHistoryMixin):
                 cls.bulk_update_cache(to_update)
 
         return {'created': created_count, 'updated': updated_count}
+    
+    def save_history(self):
+        pass
+
+    def update(self, *args, user=None, username=None, save=True, **kwargs):
+        """
+        Overrides the default update to update the cache after saving the instance.
+        """
+        obj_data = kwargs.pop("data", {})
+        if not obj_data:
+            obj_data = kwargs
+            kwargs = {}
+        [setattr(self, key, obj_data[key]) for key in obj_data]
+        if save:
+            self.save(*args, user=user, username=user, **kwargs)
+        return self
+
+    def save(self, *args, user=None, username=None, **kwargs):
+        # get the user data so as to assign later his uuid id in fields user_updated etc
+        user = self.get_user(user=user, username=username)
+        now = py_datetime.now()
+        # check if object has been newly created
+        if self.id is None:
+            # save the new object
+            self.set_pk()
+            self.user_created = user
+            self.date_created = now
+            self.date_updated = now
+            self.user_updated = user
+            result = super().save(*args, **kwargs)
+            self.update_cache()
+            return result
+        if self.is_dirty(check_relationship=True):
+            if not self.user_created:
+                # past = self.objects.filter(pk=self.id).first()
+                # if not past:
+                self.user_created = user
+                self.date_created = now
+                # TODO this could erase a instance, version check might be too light
+                # elif not self.version == past.version:
+                #     raise ValidationError(
+                #         "Record has not be updated - the version don't match with existing record"
+                #     )
+            self.date_updated = now
+            self.user_updated = user
+            self.version = self.version + 1
+            # check if we have business model
+            if hasattr(self, "replacement_uuid"):
+                if (
+                    self.replacement_uuid is not None
+                    and "replacement_uuid" not in self.get_dirty_fields()
+                ):
+                    raise ValidationError(
+                        "Update error! You cannot update replaced entity"
+                    )
+            result = super().save(*args, **kwargs)
+            self.update_cache()
+            return result
+        else:
+            raise ValidationError(
+                "Record has not be updated - there are no changes in fields"
+            )
+
+    def delete_history(self):
+        pass
+
+    def get_user(self, user=None, username=None):
+        if not user:
+            user_id = 1
+            if username:
+                user = apps.get_model('core', 'User').objects.filter(username=username).first()
+            elif getattr(self, 'audit_user_id', None):
+                user_id = getattr(self, 'audit_user_id', None)
+                if user_id == -1:
+                    user_id = 1
+            if not user:
+                user = apps.get_model('core', 'User').objects.filter(i_user_id=user_id).first()
+            # if not user and not settings.IS_TESTING:
+            #     user = get_current_user()
+        return user
+
+    def delete(self, *args, user=None, username=None, **kwargs):
+        user = self.get_user(user=user, username=username)
+        if not self.is_dirty(check_relationship=True) and getattr(self, 'active', True):
+            now = py_datetime.now()
+            self.date_updated = now
+            self.user_updated = user
+            self.version = self.version + 1
+            self.active = False
+            # check if we have business model
+            if hasattr(self, "replacement_uuid"):
+                # When a replacement entity is deleted, the link should be removed
+                # from replaced entity so a new replacement could be generated
+                replaced_entity = self.__class__.objects.filter(
+                    replacement_uuid=self.id
+                ).first()
+                if replaced_entity:
+                    replaced_entity.replacement_uuid = None
+                    replaced_entity.save(user=user)
+            result = super().save(*args, **kwargs)
+            return result
+        else:
+            raise ValidationError(
+                "Record has not be deactivated, the object is different and must be updated before deactivating"
+            )
+
+    def copy(self, exclude_fields=["id", "uuid"]):
+        """
+        Creates a copy of a Django model instance, excluding specified fields (default: 'id' and 'uuid').
+        Args:
+            exclude_fields: List of field names to exclude from copying (default: ['id', 'uuid'])
+        Returns:
+            A new unsaved instance with copied attributes
+        """
+        model_class = self.__class__
+        new_instance = model_class()
+        fields = self._meta.get_fields()
+        for field in fields:
+            if field.name not in exclude_fields and hasattr(self, field.name):
+                if field.is_relation:
+                    if field.many_to_one or field.one_to_one:
+                        setattr(new_instance, field.name, getattr(self, field.name))
+                    elif field.one_to_many or field.many_to_many:
+                        continue
+                else:
+                    setattr(new_instance, field.name, getattr(self, field.name))
+
+        return new_instance
 
     class Meta:
         abstract = True

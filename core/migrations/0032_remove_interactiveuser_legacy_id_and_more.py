@@ -23,18 +23,8 @@ class Migration(migrations.Migration):
         ),
         migrations.AddField(
             model_name="interactiveuser",
-            name="date_created",
-            field=models.DateTimeField(default=datetime.datetime.now, null=True),
-        ),
-        migrations.AddField(
-            model_name="interactiveuser",
             name="date_deactivated",
             field=models.DateTimeField(default=None, null=True),
-        ),
-        migrations.AddField(
-            model_name="interactiveuser",
-            name="date_updated",
-            field=models.DateTimeField(default=datetime.datetime.now, null=True),
         ),
         migrations.AddField(
             model_name="interactiveuser",
@@ -46,26 +36,7 @@ class Migration(migrations.Migration):
             name="json_ext",
             field=models.JSONField(blank=True, db_column="Json_ext", null=True),
         ),
-        migrations.AddField(
-            model_name="interactiveuser",
-            name="user_created",
-            field=models.ForeignKey(
-                null=True,
-                on_delete=django.db.models.deletion.DO_NOTHING,
-                related_name="%(class)s_user_created",
-                to=settings.AUTH_USER_MODEL,
-            ),
-        ),
-        migrations.AddField(
-            model_name="interactiveuser",
-            name="user_updated",
-            field=models.ForeignKey(
-                null=True,
-                on_delete=django.db.models.deletion.DO_NOTHING,
-                related_name="%(class)s_user_updated",
-                to=settings.AUTH_USER_MODEL,
-            ),
-        ),
+       
         migrations.AddField(
             model_name="interactiveuser",
             name="version",
@@ -150,14 +121,7 @@ class Migration(migrations.Migration):
                     models.JSONField(blank=True, db_column="Json_ext", null=True),
                 ),
                 ("date_deactivated", models.DateTimeField(default=None, null=True)),
-                (
-                    "date_created",
-                    models.DateTimeField(default=datetime.datetime.now, null=True),
-                ),
-                (
-                    "date_updated",
-                    models.DateTimeField(default=datetime.datetime.now, null=True),
-                ),
+
                 ("version", models.IntegerField(default=1)),
                 (
                     "validity_from",
@@ -268,28 +232,6 @@ class Migration(migrations.Migration):
                         on_delete=django.db.models.deletion.DO_NOTHING,
                         related_name="+",
                         to="core.language",
-                    ),
-                ),
-                (
-                    "user_created",
-                    models.ForeignKey(
-                        blank=True,
-                        db_constraint=False,
-                        null=True,
-                        on_delete=django.db.models.deletion.DO_NOTHING,
-                        related_name="+",
-                        to=settings.AUTH_USER_MODEL,
-                    ),
-                ),
-                (
-                    "user_updated",
-                    models.ForeignKey(
-                        blank=True,
-                        db_constraint=False,
-                        null=True,
-                        on_delete=django.db.models.deletion.DO_NOTHING,
-                        related_name="+",
-                        to=settings.AUTH_USER_MODEL,
                     ),
                 ),
             ],
