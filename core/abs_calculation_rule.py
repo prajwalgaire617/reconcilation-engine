@@ -89,6 +89,16 @@ class AbsStrategy(object, metaclass=abc.ABCMeta):
     from_to = property(get_from_to, set_from_to)
 
     @classmethod
+    def get_supports_advanced_criteria(cls):
+        return getattr(cls, '_supports_advanced_criteria', True)
+
+    @classmethod
+    def set_supports_advanced_criteria(cls, val):
+        cls._supports_advanced_criteria = val
+
+    supports_advanced_criteria = property(get_supports_advanced_criteria, set_supports_advanced_criteria)
+
+    @classmethod
     def ready(cls):
         now = datetime.datetime.now()
         condition_is_valid = (
