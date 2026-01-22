@@ -12,17 +12,15 @@ def empty_tbl_logins(apps, schema_editor):
     """
     try:
         with schema_editor.connection.cursor() as cursor:
-            # Check if tblLogins table exists
-            cursor.execute("""
-                SELECT EXISTS (
-                    SELECT 1
-                    FROM information_schema.tables
-                    WHERE table_schema = 'public'
-                    AND table_name = 'tblLogins'
-                )
-            """)
-            table_exists = cursor.fetchone()[0]
+            # Check if tblLogins table exists using Django introspection
+            introspection = schema_editor.connection.introspection
+            try:
+                table_names = introspection.table_names(cursor)
+            except TypeError:
+                # Fallback for Django versions where table_names takes no cursor argument
+                table_names = introspection.table_names()
 
+            table_exists = 'tblLogins' in table_names
             if table_exists:
                 # PostgreSQL: Use DO block for error handling
                 cursor.execute('DELETE FROM "tblLogins" WHERE 1=1')
