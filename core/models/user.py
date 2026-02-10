@@ -17,10 +17,13 @@ from django.db import models
 from django.utils.crypto import salted_hmac
 from graphql import ResolveInfo
 import core
+from hashlib import sha256
+from secrets import token_hex
 from django.contrib.auth.password_validation import validate_password
-from ..utils import filter_validity, CachedManager
+from ..utils import CachedManager
 from .base import ExtendableModel, Language, UUIDModel
-from .versioned_model import UUIDVersionedModel, VersionedModel
+from .versioned_model import VersionedModel
+from .openimis_model import OpenIMISMigrationModel, OpenIMISHistoryMixin  # , OpenIMISModel
 from core.utils import to_list_permissions
 from rest_framework import exceptions
 
@@ -58,7 +61,7 @@ class UserManager(BaseUserManager, CachedManager):
         if not username:
             raise exceptions.AuthenticationFailed("INCORRECT_CREDENTIALS")
         i_user = InteractiveUser.objects.filter(
-            login_name__iexact=username, *filter_validity()
+            login_name__iexact=username, *InteractiveUser.filter_validity()
         ).first()
         if not i_user:
             raise exceptions.AuthenticationFailed("INCORRECT_CREDENTIALS")
@@ -188,13 +191,13 @@ class RoleRight(VersionedModel):
         db_table = "tblRoleRight"
 
 
-class InteractiveUser(VersionedModel):
+class InteractiveUser(OpenIMISMigrationModel):
     UNIQUE_FIELDS = {"pk", "uuid", "id", "login_name"}
     USE_CACHE = not settings.IS_TESTING
-    id = models.AutoField(db_column="UserID", primary_key=True)
-    uuid = models.CharField(
-        db_column="UserUUID", max_length=36, default=uuid.uuid4, unique=True
-    )
+    # id = models.AutoField(db_column="UserID", primary_key=True)
+    # uuid = models.CharField(
+    #     db_column="UserUUID", max_length=36, default=uuid.uuid4, unique=True
+    # )
     language = models.ForeignKey(Language, models.DO_NOTHING, db_column="LanguageID")
     last_name = models.CharField(db_column="LastName", max_length=100)
     other_names = models.CharField(db_column="OtherNames", max_length=100)
@@ -203,7 +206,6 @@ class InteractiveUser(VersionedModel):
     last_login = models.DateTimeField(db_column="LastLogin", null=True, blank=True)
     health_facility_id = models.IntegerField(db_column="HFID", blank=True, null=True)
 
-    audit_user_id = models.IntegerField(db_column="AuditUserID")
     # dummy_pwd is always blank. It is actually a transient field used in the Legacy to pass the clear text password in
     # a User object from the ASPX to the DAL where it is processed into/against password and private key/salt)
     # dummy_pwd = models.CharField(db_column='DummyPwd', max_length=25, blank=True, null=True)
@@ -310,7 +312,7 @@ class InteractiveUser(VersionedModel):
         is_officer = cache.get(cache_name)
         if is_officer is None:
             is_officer = Officer.objects.filter(
-                code=self.login_name, has_login=True, *filter_validity()
+                code=self.login_name, has_login=True, *Officer.filter_validity()
             ).exists()
             cache.set(cache_name, is_officer, None)
         return is_officer
@@ -327,7 +329,7 @@ class InteractiveUser(VersionedModel):
                 from core.models.user import ClaimAdmin
 
                 is_claim_admin = ClaimAdmin.objects.filter(
-                    code=self.login_name, has_login=True, *filter_validity()
+                    code=self.login_name, has_login=True, *ClaimAdmin.filter_validity()
                 ).exists()
                 cache.set(cache_name, is_claim_admin, None)
             return is_claim_admin
@@ -348,12 +350,9 @@ class InteractiveUser(VersionedModel):
             cache.set("is_admin_" + str(self.id), is_admin, 600)
         return is_admin
 
-    def set_password(self, raw_password):
-        from hashlib import sha256
-        from secrets import token_hex
-
+    def set_password(self, raw_password, private_key=token_hex(128)):
         validate_password(raw_password)
-        self.private_key = token_hex(128)
+        self.private_key = private_key
         pwd_hash = sha256()
         pwd_hash.update(f"{raw_password.rstrip()}{self.private_key}".encode())
         self.password = (
@@ -635,9 +634,10 @@ class UserRole(VersionedModel):
         db_table = "tblUserRole"
 
 
-class User(UUIDModel, PermissionsMixin, UUIDVersionedModel):
-    USE_CACHE = not settings.IS_TESTING
+class User(UUIDModel, OpenIMISHistoryMixin, PermissionsMixin):
 
+    USE_CACHE = not settings.IS_TESTING
+    objects = CachedManager()
     username = models.CharField(unique=True, max_length=50)
     t_user = models.ForeignKey(
         TechnicalUser, on_delete=models.CASCADE, blank=True, null=True
@@ -657,6 +657,11 @@ class User(UUIDModel, PermissionsMixin, UUIDVersionedModel):
 
     objects = UserManager()
 
+    @staticmethod
+    def filter_validity(arg="validity", prefix="", **kwargs):
+        return {}
+        return {}
+
     def check_password(self, *args, **kwargs):
         if self._u:
             return self._u.check_password(*args, **kwargs)
@@ -667,10 +672,11 @@ class User(UUIDModel, PermissionsMixin, UUIDVersionedModel):
         pass
 
     def delete_history(self, **kwargs):
-        now = py_datetime.now()
-        self.validity_from = now
-        self.validity_to = now
-        self.save()
+        # now = py_datetime.now()
+        # self.validity_from = now
+        # self.validity_to = now
+        # self.save()
+        pass
 
     @property
     def _u(self):
@@ -692,7 +698,7 @@ class User(UUIDModel, PermissionsMixin, UUIDVersionedModel):
 
     @property
     def id_for_audit(self):
-        return self._u.id
+        return self.i_user_id or -1
 
     @property
     def last_login(self):
@@ -729,14 +735,17 @@ class User(UUIDModel, PermissionsMixin, UUIDVersionedModel):
 
     @property
     def is_active(self):
-        if self._u.validity_from is None and self._u.validity_to is None:
+        if self.i_user:
+            return self.i_user.active
+        else:
+            if self._u.validity_from is None and self._u.validity_to is None:
+                return True
+            now = py_datetime.now()
+            if self._u.validity_from is not None and self._u.validity_from > now:
+                return False
+            if self._u.validity_to is not None and self._u.validity_to < now:
+                return False
             return True
-        now = py_datetime.now()
-        if self._u.validity_from is not None and self._u.validity_from > now:
-            return False
-        if self._u.validity_to is not None and self._u.validity_to < now:
-            return False
-        return True
 
     def has_perm(self, perm, obj=None):
         i_user = self.i_user if obj is None else obj.i_user
@@ -815,8 +824,26 @@ class User(UUIDModel, PermissionsMixin, UUIDVersionedModel):
         return "(%s) %s [%s]" % (utype, self.username, self.id)
 
     def save(self, *args, **kwargs):
-        if self._u and self._u.id:
-            self._u.save()
+        if self.i_user:
+            try:
+                self.i_user.save()
+            except Exception as e:
+                logger.debug(f"cannot save i_user: {e}")
+        if self.officer:
+            try:
+                self.officer.save()
+            except Exception as e:
+                logger.debug(f"cannot save officer {e}")
+        if self.claim_admin:
+            try:
+                self.claim_admin.save()
+            except Exception as e:
+                logger.debug(f"cannot save claim_admin {e}")
+        if self.t_user:
+            try:
+                self.t_user.save()
+            except Exception as e:
+                logger.debug(f"cannot save t_user {e}")
         super().save(*args, **kwargs)
 
     def shallow_save(self, *args, **kwargs):

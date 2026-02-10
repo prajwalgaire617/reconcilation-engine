@@ -2,8 +2,8 @@ from core.models.openimis_graphql_test_case import (
     openIMISGraphQLTestCase,
     BaseTestContext,
 )
-from core.test_helpers import create_test_interactive_user
-from core import filter_validity
+from core.models import Language
+from core.test_helpers import create_test_interactive_user, create_admin_role
 from location.models import Location
 import json
 
@@ -22,7 +22,13 @@ class gqlTest(openIMISGraphQLTestCase):
         )
         cls.admin_token_context = BaseTestContext(user=cls.admin_user)
         cls.admin_token = cls.admin_token_context.get_jwt()
-        cls.disctict = Location.objects.filter(type="D", *filter_validity()).first()
+        cls.disctict = Location.objects.filter(type="D", *Location.filter_validity()).first()
+
+        # Create French language if it doesn't exist
+        Language.objects.get_or_create(
+            code="fr",
+            defaults={"name": "Français", "sort_order": 1}
+        )
 
     def test_login_successful(self):
         variables = {
@@ -133,7 +139,7 @@ class gqlTest(openIMISGraphQLTestCase):
                 "districts": [self.disctict.id],
                 "locationId": None,
                 "language": "en",
-                "roles": ["4"],
+                "roles": [create_admin_role().id],
                 "substitutionOfficerId": None,
                 "clientMutationLabel": "Create user",
                 "clientMutationId": "95b431f3-0c12-40ad-bc01-51034702366d",
@@ -221,3 +227,60 @@ class gqlTest(openIMISGraphQLTestCase):
             query, headers={"HTTP_AUTHORIZATION": f"Bearer {self.admin_token}"}
         )
         self.assertResponseNoErrors(response)
+
+    def test_user_modification_creates_history_with_user(self):
+        """Test that user modification via GraphQL creates history record with user included for audit"""
+        from core.models import InteractiveUser
+
+        # Get initial history count for the admin user
+        initial_history_count = self.admin_user.i_user.history.count()
+
+        # Change the user's language via GraphQL
+        query = """
+            mutation {
+                changeUserLanguage(
+                    input: {
+                        clientMutationId: "test-history-audit",
+                        clientMutationLabel: "Test User History Audit",
+                        languageId: "fr"
+                    }
+                ) {
+                    clientMutationId
+                    internalId
+                }
+            }
+        """
+        response = self.query(
+            query, headers={"HTTP_AUTHORIZATION": f"Bearer {self.admin_token}"}
+        )
+        self.assertResponseNoErrors(response)
+
+        # Check that history record was created
+        final_history_count = self.admin_user.i_user.history.count()
+        self.assertEqual(
+            final_history_count,
+            initial_history_count + 1,
+            "History record should have been created for user modification"
+        )
+
+        # Get the latest history record
+        latest_history = self.admin_user.i_user.history.first()  # Ordered by -history_date, -history_id
+
+        # Verify that the history record contains the user who made the change
+        self.assertIsNotNone(
+            latest_history.history_user,
+            "History record should contain the user who made the change"
+        )
+        self.assertEqual(
+            latest_history.history_user.id,
+            self.admin_user.id,
+            "History record should reference the correct user who made the change"
+        )
+
+        # Verify that the language was actually changed
+        self.admin_user.i_user.refresh_from_db()
+        self.assertEqual(
+            self.admin_user.i_user.language.code,
+            "fr",
+            "User language should have been changed to French"
+        )

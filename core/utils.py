@@ -20,7 +20,15 @@ from zxcvbn import zxcvbn
 import datetime
 from django.core.cache import caches
 from functools import lru_cache
+# utils/request_local.py
+import threading
+from django.db import transaction
+# from simple_history.utils import update_change_reason
+import time
+import os
 
+
+_request_local = threading.local()
 
 logger = logging.getLogger(__file__)
 
@@ -43,6 +51,19 @@ __all__ = [
     "get_scheduler_method_ref",
     "ExtendedRelayConnection",
 ]
+
+
+def get_current_user():
+    return getattr(_request_local, "user", None)
+
+
+def set_current_user(user):
+    _request_local.user = user
+
+
+def clear_current_user():
+    if hasattr(_request_local, "user"):
+        del _request_local.user
 
 
 class TimeUtils(object):
@@ -136,18 +157,22 @@ def __place_the_filters(date_start, date_end):
 
 
 def append_validity_filter(**kwargs):
-    default_filter = kwargs.get("applyDefaultValidityFilter", False)
-    date_valid_from = kwargs.get("dateValidFrom__Gte", None)
-    date_valid_to = kwargs.get("dateValidTo__Lte", None)
+    default_filter = kwargs.pop("applyDefaultValidityFilter", False)
+    date_valid_from = kwargs.pop("dateValidFrom__Gte", None)
+    date_valid_to = kwargs.pop("dateValidTo__Lte", None)
     filters = []
     # check if we can use default filter validity
     if date_valid_from is None and date_valid_to is None:
         if default_filter:
-            filters = [*filter_validity_business_model(**kwargs)]
+            filters = [*filter_validity_business_model()]
         else:
             filters = []
     else:
-        filters = [*filter_validity_business_model(**kwargs)]
+        filters = [*filter_validity_business_model(
+            dateValidFrom__Gte=date_valid_from,
+            dateValidTo__Lte=date_valid_to)
+        ]
+
     return filters
 
 
@@ -250,8 +275,8 @@ class CachedManager(models.Manager):
 
     def _normalize_value(self, value):
         """Normalize value for cache key."""
-        if isinstance(value, uuid.UUID):
-            return str(value)
+        if isinstance(value, (str, uuid.UUID)):
+            return str(value).lower()
         try:
             return int(value)
         except (ValueError, TypeError):
@@ -518,8 +543,77 @@ def clean_fk(instance):
     return field_values
 
 
+def uuidv7() -> uuid.UUID:
+    """
+    Generate a UUIDv7.
+    """
+    # random bytes
+    value = bytearray(os.urandom(16))
+
+    # current timestamp in ms
+    timestamp = int(time.time() * 1000)
+
+    # timestamp
+    value[0] = (timestamp >> 40) & 0xFF
+    value[1] = (timestamp >> 32) & 0xFF
+    value[2] = (timestamp >> 24) & 0xFF
+    value[3] = (timestamp >> 16) & 0xFF
+    value[4] = (timestamp >> 8) & 0xFF
+    value[5] = timestamp & 0xFF
+
+    # version and variant
+    value[6] = (value[6] & 0x0F) | 0x70
+    value[8] = (value[8] & 0x3F) | 0x80
+
+    return uuid.UUID(bytes=bytes(value))
+
+
 class CachedModelMixin:
     USE_CACHE = settings.CACHE_OBJECT_DEFAULT
+    UNIQUE_FIELDS = {"id", "uuid", "pk"}
+
+    @classmethod
+    def bulk_update_cache(cls, objs):
+        """
+        Efficiently update caches for a list of updated objects after bulk_update.
+        Call this manually after your manager's bulk_update if needed,
+        or integrate into the manager method.
+        """
+        if not cls.USE_CACHE or not objs:
+            return
+
+        now = settings.CACHE_OBJECT_TTL  # or None for no timeout
+
+        # Get unique fields once
+        unique_fields = getattr(cls, "UNIQUE_FIELDS")
+
+        # Primary caches: key(pk) -> full cleaned object
+        primary_data = {}
+        for obj in objs:
+            if obj.pk:
+                primary_data[get_cache_key(cls, obj.pk)] = clean_fk(obj)
+
+        if primary_data:
+            cache.set_many(primary_data, timeout=now)
+
+        # Secondary caches: key(field_value) -> pk  (only if value != pk)
+        secondary_data = {}
+        for obj in objs:
+            if not obj.pk:
+                continue
+            for f in unique_fields:
+                try:
+                    val = getattr(obj, f)
+                except AttributeError:
+                    continue  # skip if field doesn't exist (e.g. property)
+                if val != obj.pk:  # your original condition
+                    key = get_cache_key(cls, val)
+                    secondary_data[key] = obj.pk
+
+        if secondary_data:
+            cache.set_many(secondary_data, timeout=now)
+
+        logger.debug("Bulk cached %d instances of %s", len(objs), cls.__name__)
 
     def update_cache(self):
         """
@@ -532,7 +626,7 @@ class CachedModelMixin:
                 timeout=settings.CACHE_OBJECT_TTL,
             )
             unique_fields = getattr(
-                self.__class__.objects, "UNIQUE_FIELDS", {"id", "uuid", "pk"}
+                self, "UNIQUE_FIELDS", {"id", "uuid", "pk"}
             )
             for f in unique_fields:
                 # get_field raised an error on property raise
@@ -552,6 +646,9 @@ class CachedModelMixin:
             cache_key = f"{self.__class__.__name__}:{self.pk}"
             cache.delete(cache_key)
             logger.debug(f"Removed instance from cache: {cache_key}")
+
+    class Meta:
+        abstract = True
 
 
 class ExtendedConnection(graphene.Connection):
@@ -603,7 +700,6 @@ class ExtendedRelayConnection(graphene.relay.Connection):
     """
     Adds total_count and edge_count to Graphene Relay connections.
     """
-
     class Meta:
         abstract = True
 
@@ -845,7 +941,7 @@ def clear_cache(instance):
 
 
 def get_cache_key(model, id):
-    return f"cs_{model.__name__}_{id}"
+    return f"cs_{model.__name__}_{str(id).lower()}"
 
 
 def is_this_session_superuser(session_key):
@@ -927,3 +1023,59 @@ def to_list_permissions():
             for perm_id in perm_ids:
                 all_perms.add(int(perm_id))
     return sorted(list(all_perms))
+
+
+def migrate_from_versioned_to_history(model_class, history_model_class):
+    """
+    Migrates records with non-null validity_to to the history model for the given model class.
+
+    Args:
+        model_class: The Django model class to migrate (e.g., InteractiveUser).
+        history_model_class: The corresponding history model class (e.g., HistoricalInteractiveUser).
+
+    Returns:
+        str: A message indicating the number of records migrated.
+    """
+    records_to_migrate = model_class.objects.filter(validity_to__isnull=False)
+    migrated_count = 0
+
+    with transaction.atomic():
+        for record in records_to_migrate:
+            try:
+                # Create a history record
+                history_record = history_model_class()
+
+                # Copy all fields from the original record
+                for field in record._meta.get_fields():
+                    if field.name not in ['history']:  # Skip id and history fields
+                        if field.is_relation:
+                            if field.many_to_one or field.one_to_one:
+                                try:
+                                    setattr(history_record, field.name, getattr(record, field.name))
+                                except Exception as e:
+                                    logger.warning(f"Failed to copy relation field {field.name}: {e}")
+                        else:
+                            setattr(history_record, field.name, getattr(record, field.name))
+
+                # Set history-specific fields
+                history_record.history_date = record.validity_to or datetime.datetime.now()
+                history_record.history_change_reason = "Migrated to history"
+                history_record.history_type = '~'  # Update operation
+
+                # Save the history record
+                history_record.save()
+
+                # Update change reason
+                # update_change_reason(history_record, "Migrated to history")
+
+                # Delete the original record from the main table
+                record.delete()
+                migrated_count += 1
+
+            except Exception as e:
+                logger.error(f"Error migrating record {record.id}: {e}")
+                raise
+
+    result = f"Migrated {migrated_count} records to history for {model_class.__name__}"
+    logger.info(result)
+    return result

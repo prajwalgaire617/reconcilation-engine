@@ -6,7 +6,7 @@ from django.db.models import Q
 
 from core.utils import (
     full_class_name, comparable, to_json_safe_value,
-    to_list_permissions, filter_validity, collect_all_gql_permissions
+    to_list_permissions, collect_all_gql_permissions
 )
 from core.datetimes.ad_datetime import AdDate, AdDatetime
 from core.test_helpers import create_test_interactive_user
@@ -67,21 +67,21 @@ class UtilsTestCase(TestCase):
         self.assertEquals(to_json_safe_value(decimal_obj), str(decimal_obj))
 
     def test_is_admin_rights(self):
-        role = Role.objects.filter(is_system=64, *filter_validity()).first()
-        user = User.objects.filter(username="Admin", *filter_validity()).first()
+        role = Role.objects.filter(is_system=64, *Role.filter_validity()).first()
+        user = User.objects.filter(username="Admin", *User.filter_validity()).first()
         if not user:
             user = create_test_interactive_user(username="Admin", roles=[role.id])
         # removing all role but admin
         UserRole.objects.filter(
-            ~Q(role__is_system=64), user=user._u, *filter_validity()
+            ~Q(role__is_system=64), user=user._u, *UserRole.filter_validity()
         ).delete()
         # removing all admin rights
-        RoleRight.objects.filter(role__is_system=64, *filter_validity()).delete()
+        RoleRight.objects.filter(role__is_system=64, *RoleRight.filter_validity()).delete()
         rights = list(user.rights)
         rights_db = [
             rr.right_id
             for rr in RoleRight.filter_queryset()
-            .filter(role__is_system=64, *filter_validity(prefix="role__"))
+            .filter(role__is_system=64, *RoleRight.filter_validity(prefix="role__"))
             .distinct()
         ]
         self.assertEquals(len(rights_db), 0, "all roleright are not removed")
@@ -119,30 +119,40 @@ class UtilsTestCase(TestCase):
 
     def test_cache_invalidation(self):
         User.USE_CACHE = True
+        create_test_interactive_user(username="one")
+        create_test_interactive_user(username="two")
         users = list(User.objects.all())
         users_id = [user.id for user in users]
-        users_0_no_cache_get = User.objects.get(id=users_id[0])
+        # get 0 without cache
+        users_0_no_cache_get = User.objects.get(id=users_id[0], *User.filter_validity())
+        # get 0 with cache
         users_0_filter = User.objects.filter(id=users_id[0]).first()
+        # get 1 with cache
+        users_1_filter = User.objects.filter(id=users_id[-1]).first()
         self.assertEquals(
             users_0_no_cache_get,
             users_0_filter,
             "get and filter should retrieve the same object",
         )
+        # update 1, cache should be invalidaed
         users_0_filter.username = users_0_filter.username + "T"
         users_0_filter.save()
+        # get use from cache / partially from cache
         users_filter = list(User.objects.filter(id__in=users_id))
-        caches["default"].delete(f"cd_User_{users_filter[2].id}")
-        users.remove(users_0_no_cache_get)
-        users_filter.remove(users_0_filter)
         users_0_filter = User.objects.filter(id=users_id[0]).first()
         self.assertNotEquals(
             users_0_no_cache_get.username,
             users_0_filter.username,
             "the object should be different, cache not invalidated properly",
         )
-        self.assertNotEquals(
-            users,
-            users_filter,
+        # remove user 1 from cache
+        caches["default"].delete(f"cd_User_{users_1_filter.id}")
+        # remove user 1 from all user list (old and new)
+        users.remove(users_0_no_cache_get)
+        users_filter.remove(users_0_filter)
+        self.assertEquals(
+            sorted(users, key=lambda x: x.id),
+            sorted(users_filter, key=lambda x: x.id),
             "should be the same list even if user_filter comes partially from cache",
         )
         caches["default"].clear()

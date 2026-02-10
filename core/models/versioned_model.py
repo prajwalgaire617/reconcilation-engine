@@ -6,7 +6,7 @@ from django.db import models
 
 from core.utils import CachedManager, CachedModelMixin
 from ..fields import DateTimeField
-from ..utils import filter_validity
+from ..utils import filter_validity as core_filter_validity
 import logging
 
 logger = logging.getLogger(__name__)
@@ -21,13 +21,13 @@ class BaseVersionedModel(CachedModelMixin, models.Model):
 
     @staticmethod
     def filter_validity(validity=None, prefix="", **kwargs):
-        return filter_validity(validity=validity, prefix=prefix, **kwargs)
+        return core_filter_validity(validity=validity, prefix=prefix, **kwargs)
 
     def update(self, *args, **kwargs):
         """
         Overrides the default update to update the cache after saving the instance.
         """
-        obj_data = kwargs.pop("data", {})
+        obj_data = kwargs.pop("data", None)
         if not obj_data:
             obj_data = kwargs
             kwargs = {}
@@ -39,7 +39,7 @@ class BaseVersionedModel(CachedModelMixin, models.Model):
         Overrides the default save to update the cache after saving the instance.
         """
         caching = kwargs.pop("cache_update", True)
-        super().save(*args, **kwargs)
+        super(BaseVersionedModel, self).save(*args, **kwargs)
         if caching:
             # Build the cache key using the same logic as in the CachedManager.
             # (Assuming lookups are done using pk/id/uuid)
@@ -83,7 +83,7 @@ class BaseVersionedModel(CachedModelMixin, models.Model):
     def filter_queryset(cls, queryset=None):
         if queryset is None:
             queryset = cls.objects.all()
-        queryset = queryset.filter(*filter_validity())
+        queryset = queryset.filter(*core_filter_validity())
         return queryset
 
 

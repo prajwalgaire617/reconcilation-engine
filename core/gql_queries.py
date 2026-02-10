@@ -1,6 +1,6 @@
 import graphene
 import location.gql_queries
-from core import ExtendedConnection, filter_validity
+from core import ExtendedConnection
 from core.models import (
     Officer,
     Role,
@@ -12,7 +12,7 @@ from core.models import (
     Language,
 )
 from graphene_django import DjangoObjectType
-from location.models import HealthFacility
+from location.models import HealthFacility, UserDistrict
 from core.apps import CoreConfig
 from django.utils.translation import gettext as _
 from django.core.exceptions import PermissionDenied
@@ -40,7 +40,7 @@ class OfficerGQLType(DjangoObjectType):
 
     @classmethod
     def get_queryset(cls, queryset, info):
-        queryset = queryset.filter(*filter_validity())
+        queryset = queryset.filter(*Officer.filter_validity())
         return queryset
 
 
@@ -159,7 +159,7 @@ class InteractiveUserGQLType(DjangoObjectType):
         if not info.context.user.is_authenticated:
             raise PermissionDenied(_("unauthorized"))
         if self.userdistrict_set:
-            return self.userdistrict_set.filter(*filter_validity())
+            return self.userdistrict_set.filter(*UserDistrict.filter_validity())
         else:
             return None
 

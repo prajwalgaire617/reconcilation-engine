@@ -59,7 +59,7 @@ def mutation_on_uuids_from_filter(
                 q_filter = map_gql_to_django_filter(
                     args, available_filters, explicit_filters_handlers
                 )
-                base_query = django_object.objects.filter(validity_to=None).filter(
+                base_query = django_object.objects.filter(*django_object.filter_validity()).filter(
                     q_filter
                 )
                 if return_objects:

@@ -29,9 +29,6 @@ class CurrentUserAPITest(APITestCase):
     def test_authenticated_get_current_user(self):
         url = '/api/core/users/current_user/'
         # Authenticate the client using JWT token
-        self.admin_user._u.given_name = "my test"
-        self.admin_user._u.save_history()
-        self.admin_user._u.save()
         self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {self.admin_token}')
         response = self.client.get(url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)

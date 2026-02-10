@@ -12,12 +12,18 @@ from graphql_jwt.shortcuts import get_token as get_token_jwt
 from django.contrib.auth.models import AnonymousUser
 from django.contrib.sessions.backends.db import SessionStore
 from django.core.cache import cache
-
+from core.utils import clear_current_user
+from django.db import transaction
 
 logger = logging.getLogger(__name__)
 
 
 class BaseTestContext:
+
+    cookies = None
+    jwt = None
+    user = None
+
     def __init__(self, user=None, method="GET", path="/", data=None, headers=None):
         """
         Initialize a test context with realistic request attributes.
@@ -29,7 +35,8 @@ class BaseTestContext:
             data: Request payload (dict for POST/PUT, None for GET).
             headers: Custom HTTP headers (dict).
         """
-        cookies = {}
+        self.cookies = {}
+        self.META = {}
         self.factory = RequestFactory()
 
         # Initialize session
@@ -41,8 +48,7 @@ class BaseTestContext:
                 user.id
             )  # Store user ID or other relevant data
             self.session.save()  # Save session to generate session_key
-            self.jwt = get_token_jwt(self.user, self)
-            cookies["JWT"] = self.jwt
+            self.get_jwt()
         else:
             self.user = AnonymousUser()
 
@@ -82,10 +88,14 @@ class BaseTestContext:
                 self.META[meta_key] = value
 
         # Add cookies (e.g., session ID and JWT token)
-        cookies["sessionid"] = self.session.session_key
-        if cookies:
+        self.cookies["sessionid"] = self.session.session_key
+
+        self._gen_meta()
+
+    def _gen_meta(self):
+        if self.cookies:
             cookie_string = "; ".join(
-                f"{key}={value}" for key, value in cookies.items()
+                f"{key}={value}" for key, value in self.cookies.items()
             )
             self.META["HTTP_COOKIE"] = cookie_string
 
@@ -99,19 +109,41 @@ class BaseTestContext:
         return self.request
 
     def get_jwt(self):
-        """Return the JWT token."""
-        return getattr(self, "jwt", None)
+        if self.user:
+            self.jwt = get_token_jwt(self.user, self)
+            self.cookies["JWT"] = self.jwt
+            self._gen_meta()
+            return self.jwt
 
 
 class openIMISGraphQLTestCase(GraphQLTestCase):
     GRAPHQL_URL = f"/{settings.SITE_ROOT()}graphql"
     GRAPHQL_SCHEMA = True
+    """
+    Enhanced version that wraps every test in an atomic transaction.
+    Prevents GraphQL validation errors (400) from closing the DB connection.
+    """
+    def _execute_test(self):
+        with transaction.atomic():
+            super()._execute_test()
 
-    # client = None
+    def run(self, result=None):
+        """
+        Override run() to ensure atomic block even when pytest-django calls it.
+        """
+        with transaction.atomic():
+            super().run(result)
+
     @classmethod
     def setUpClass(cls):
-        # cls.client=Client(cls.schema)
+        clear_current_user()
+        cache.clear()
         super(openIMISGraphQLTestCase, cls).setUpClass()
+
+    def setUp(self):
+        clear_current_user()
+        cache.clear()
+        super(openIMISGraphQLTestCase, self).setUp()
 
     def get_mutation_result(
         self, mutation_uuid, token, internal=False, allow_exceptions=True
@@ -135,10 +167,14 @@ class openIMISGraphQLTestCase(GraphQLTestCase):
                 {{
                     node
                     {{
-                        id,status,error,{
-                            'clientMutationId,' if not internal
-                            else ''
-                        }clientMutationLabel,clientMutationDetails,requestDateTime,jsonExt
+                        id,
+                        status,
+                        error,
+                        {'clientMutationId,' if not internal else ''}
+                        clientMutationLabel,
+                        clientMutationDetails,
+                        requestDateTime,
+                        jsonExt
                     }}
                 }}
                 }}
@@ -255,8 +291,10 @@ class openIMISGraphQLTestCase(GraphQLTestCase):
     # This validates the status code and if you get errors
     def build_params(self, params):
         def wrap_arg(v):
+            if isinstance(v, uuid.UUID):
+                return f'"{str(v).lower()}"'
             if isinstance(v, str):
-                return f'"{v}"'
+                return f'"{str(v)}"'
             if isinstance(v, list):
                 return f"[{','.join([str(wrap_arg(vv)) for vv in v])}]"
             if isinstance(v, dict):
@@ -274,6 +312,7 @@ class openIMISGraphQLTestCase(GraphQLTestCase):
         ]
         return ", ".join(params_as_args)
 
-    def tearDwon(self):
+    def tearDown(self):
         cache.clear()
-        super().tearDwon()
+        clear_current_user()
+        super().tearDown()

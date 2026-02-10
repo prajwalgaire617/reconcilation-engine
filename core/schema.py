@@ -33,7 +33,7 @@ from core.services import (
     wait_for_mutation,
 )
 from core.tasks import openimis_mutation_async
-from core import filter_validity, prefix_filterset
+from core import prefix_filterset
 from core.data_masking import anonymize_gql
 from django import dispatch
 from django.conf import settings
@@ -70,9 +70,10 @@ from core.gql_queries import (
     ModulePermissionGQLType,
     CustomFilterOptionGQLType,
 )
-from core.utils import (
+from core.utils import (  # noqa: 401
     ExtendedConnection,
     collect_all_gql_permissions,
+    filter_validity
 )
 from core.models import (
     ModuleConfiguration,
@@ -291,7 +292,7 @@ class OpenIMISMutation(graphene.relay.ClientIDMutation):
                                 coerced_list.append(item)
                         elif (
                             inner_type.__class__
-                            == graphene.utils.subclass_with_meta.SubclassWithMeta_Meta
+                            == graphene.utils.subclass_with_meta.SubclassWithMeta_Meta and getattr(inner_type._meta, 'name', '') != "Int"
                         ):
                             coerced_list.append(
                                 cls.coerce_mutation_data(item, input_class=inner_type)
@@ -743,7 +744,7 @@ class ClaimAdminGQLType(DjangoObjectType):
 
     @classmethod
     def get_queryset(cls, queryset, info):
-        queryset = queryset.filter(*filter_validity())
+        queryset = queryset.filter(*ClaimAdmin.filter_validity())
         return queryset
 
 
@@ -897,11 +898,11 @@ class Query(graphene.ObjectType):
         if not info.context.user.has_perms(CoreConfig.gql_query_claim_admins_perms):
             raise PermissionDenied(_("unauthorized"))
 
-        hf_filters = [*filter_validity(**kwargs)]
         district_uuid = kwargs.get("district_uuid", None)
         region_uuid = kwargs.get("region_uuid", None)
         try:
             HealthFacility = apps.get_model("location", "HealthFacility")
+            hf_filters = [*HealthFacility.filter_validity(**kwargs)]
             if district_uuid is not None:
                 hf_filters += [Q(location__uuid=district_uuid)]
             elif region_uuid is not None:
@@ -921,7 +922,7 @@ class Query(graphene.ObjectType):
             logger.debug(e)
             pass
 
-        filters = [*filter_validity(**kwargs)]
+        filters = [*ClaimAdmin.filter_validity(**kwargs)]
         if user_health_facility:
             filters += [Q(health_facility__in=user_health_facility)]
 
@@ -1044,7 +1045,7 @@ class Query(graphene.ObjectType):
 
         show_history = kwargs.get("show_history", False)
         if not show_history and not kwargs.get("uuid", None):
-            filters += filter_validity(**kwargs)
+            filters += InteractiveUser.filter_validity(**kwargs)
 
         return gql_optimizer.query(query.filter(*filters), info)
 
@@ -1094,9 +1095,9 @@ class Query(graphene.ObjectType):
 
         show_deleted = kwargs.get("showDeleted", False)
         if not show_deleted and not kwargs.get("id", None):
-            # active_users_ids = [user.id for user in user_query if user.is_active]
+            # active_users_ids = [user.id for user in user_query if user.active]
             user_filters.append(
-                Q(i_user__isnull=True) | Q(*filter_validity(prefix="i_user__"))
+                Q(i_user__isnull=True) | Q(*User.filter_validity(prefix="i_user__"))
             )
 
         text_search = kwargs.get("str")  # Poorly chosen name, avoid of shadowing "str"
@@ -1248,7 +1249,7 @@ class Query(graphene.ObjectType):
 
         show_history = kwargs.get("show_history", False)
         if not show_history and not kwargs.get("uuid", None):
-            filters += filter_validity(**kwargs)
+            filters += Role.filter_validity(**kwargs)
 
         is_system_role = kwargs.get("is_system", None)
         # check if we can use default filter validity
@@ -1268,7 +1269,7 @@ class Query(graphene.ObjectType):
             raise PermissionError("Unauthorized")
         filters = []
         if "validity" in kwargs:
-            filters += filter_validity(**kwargs)
+            filters += RoleRight.filter_validity(**kwargs)
             return gql_optimizer.query(RoleRight.objects.filter(*filters), info)
         else:
             return gql_optimizer.query(
@@ -1585,7 +1586,6 @@ class UpdateRoleMutation(OpenIMISMutation):
                 raise ValidationError("There is no uuid in updateMutation input!")
             if check_role_unique_name(data.get("name", None), data["uuid"]):
                 raise ValidationError("mutation.duplicate_of_role_name")
-            data["audit_user_id"] = user.id_for_audit
             update_or_create_role(data, user)
             return None
         except Exception as exc:
@@ -1740,15 +1740,11 @@ class CreateUserMutation(OpenIMISMutation):
             if type(user) is AnonymousUser or not user.id:
                 raise PermissionDenied(_("mutation.authentication_required"))
             if User.objects.filter(
-                username=data["username"], validity_to__isnull=True
+                username=data["username"], *User.filter_validity()
             ).exists():
                 raise ValidationError("User with this user name already exists.")
             if not user.has_perms(CoreConfig.gql_mutation_create_users_perms):
                 raise PermissionDenied("unauthorized")
-            from core.utils import TimeUtils
-
-            data["validity_from"] = TimeUtils.now()
-            data["audit_user_id"] = user.id_for_audit
             update_or_create_user(data, user)
             return None
         except ValidationError as ve:
@@ -1778,10 +1774,6 @@ class UpdateUserMutation(OpenIMISMutation):
                 raise PermissionDenied(_("mutation.authentication_required"))
             if not user.has_perms(CoreConfig.gql_mutation_update_users_perms):
                 raise PermissionDenied("unauthorized")
-            from core.utils import TimeUtils
-
-            data["validity_from"] = TimeUtils.now()
-            data["audit_user_id"] = user.id_for_audit
             update_or_create_user(data, user)
 
             return None
@@ -1901,7 +1893,7 @@ def update_or_create_user(data, user):
 
     if UT_INTERACTIVE in data["user_types"]:
         i_user, i_user_created = create_or_update_interactive_user(
-            user_uuid, data, user.id_for_audit, len(data["user_types"]) > 1
+            user_uuid, data, user, len(data["user_types"]) > 1
         )
     else:
         i_user = None
@@ -1937,6 +1929,7 @@ def update_or_create_user(data, user):
         i_user=i_user,
         officer=officer,
         claim_admin=claim_admin,
+        user=user
     )
 
     if client_mutation_id:
@@ -1995,7 +1988,7 @@ def set_user_deleted(user):
 def change_user_language(user, language_id):
     try:
         updated_user = InteractiveUser.objects.filter(
-            user__id=user.id, *filter_validity()
+            user__id=user.id, *InteractiveUser.filter_validity()
         ).first()
         updated_user.language_id = language_id
         updated_user.save()

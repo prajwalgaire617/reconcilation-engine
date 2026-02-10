@@ -1,21 +1,21 @@
-import uuid
 import logging
 from copy import copy
 from datetime import datetime as py_datetime
 from django.core.cache import caches
 import datetime as base_datetime
-from dirtyfields import DirtyFieldsMixin
 from django.core.exceptions import ValidationError
 from django.db import models, transaction
 from django.db.models import F
+from dirtyfields import DirtyFieldsMixin
+from core.utils import CachedManager, CachedModelMixin, filter_validity as core_filter_validity, uuidv7  
+from simple_history.utils import bulk_update_with_history, bulk_create_with_history
+from django.db.models import (
+    Q, UUIDField, DateTimeField, BooleanField, Model, IntegerField, ForeignKey,
+    BigAutoField, JSONField, deletion,
+)
 from simple_history.models import HistoricalRecords
-from simple_history.utils import bulk_create_with_history, bulk_update_with_history
-from core.utils import CachedManager, CachedModelMixin
-
-# from core.datetimes.ad_datetime import datetime as py_datetime
-
 from ..fields import DateTimeField
-from .user import User
+from django.apps import apps
 
 logger = logging.getLogger(__name__)
 
@@ -46,7 +46,13 @@ class HistoryModelManager(CachedManager):
         return super().get(*args, **kwargs)
 
 
-class HistoryModel(DirtyFieldsMixin, CachedModelMixin, models.Model):
+class HistoryModel(DirtyFieldsMixin, CachedModelMixin, Model):
+    history = HistoricalRecords(
+        inherit=True,
+    )
+    version = IntegerField(default=1)
+
+    
     id = models.UUIDField(
         primary_key=True, db_column="UUID", default=None, editable=False
     )
@@ -60,23 +66,20 @@ class HistoryModel(DirtyFieldsMixin, CachedModelMixin, models.Model):
         db_column="DateUpdated", null=True, default=py_datetime.now
     )
     user_created = models.ForeignKey(
-        User,
+        "core.User",
         db_column="UserCreatedUUID",
         related_name="%(class)s_user_created",
         on_delete=models.deletion.DO_NOTHING,
         null=False,
     )
     user_updated = models.ForeignKey(
-        User,
+        "core.User",
         db_column="UserUpdatedUUID",
         related_name="%(class)s_user_updated",
         on_delete=models.deletion.DO_NOTHING,
         null=False,
     )
     version = models.IntegerField(default=1)
-    history = HistoricalRecords(
-        inherit=True,
-    )
 
     @property
     def uuid(self):
@@ -86,137 +89,23 @@ class HistoryModel(DirtyFieldsMixin, CachedModelMixin, models.Model):
     def uuid(self, v):
         self.id = v
 
+    @property
+    def active(self):
+        return not self.is_deleted
+
+    @active.setter
+    def active(self, value):
+        self.is_deleted = not value
+
     def set_pk(self):
-        self.pk = uuid.uuid4()
+        self.pk = uuidv7()
 
-    def save_history(self):
-        pass
-
-    def update(self, *args, user=None, username=None, save=True, **kwargs):
-        """
-        Overrides the default update to update the cache after saving the instance.
-        """
-        obj_data = kwargs.pop("data", {})
-        if not obj_data:
-            obj_data = kwargs
-            kwargs = {}
-        [setattr(self, key, obj_data[key]) for key in obj_data]
-        if save:
-            self.save(*args, user=user, username=user, **kwargs)
-        return self
-
-    def save(self, *args, user=None, username=None, **kwargs):
-        # get the user data so as to assign later his uuid id in fields user_updated etc
-        if not user:
-            if username:
-                user = User.objects.get(username=username)
-            else:
-                raise ValidationError(
-                    "Save error! Provide user or the username of the current user in `username` argument"
-                )
-        now = py_datetime.now()
-        # check if object has been newly created
-        if self.id is None:
-            # save the new object
-            self.set_pk()
-            self.user_created = user
-            self.user_updated = user
-            self.date_created = now
-            self.date_updated = now
-            result = super(HistoryModel, self).save(*args, **kwargs)
-            self.update_cache()
-            return result
-        if self.is_dirty(check_relationship=True):
-            if not self.user_created:
-                past = self.objects.filter(pk=self.id).first()
-                if not past:
-                    self.user_created = user
-                    self.user_updated = user
-                    self.date_created = now
-                    self.date_updated = now
-                # TODO this could erase a instance, version check might be too light
-                elif not self.version == past.version:
-                    raise ValidationError(
-                        "Record has not be updated - the version don't match with existing record"
-                    )
-            self.date_updated = now
-            self.user_updated = user
-            self.version = self.version + 1
-            # check if we have business model
-            if hasattr(self, "replacement_uuid"):
-                if (
-                    self.replacement_uuid is not None
-                    and "replacement_uuid" not in self.get_dirty_fields()
-                ):
-                    raise ValidationError(
-                        "Update error! You cannot update replaced entity"
-                    )
-            result = super(HistoryModel, self).save(*args, **kwargs)
-            self.update_cache()
-            return result
-        else:
-            raise ValidationError(
-                "Record has not be updated - there are no changes in fields"
-            )
-
-    def delete_history(self):
-        pass
-
-    def delete(self, *args, user=None, username=None, **kwargs):
-        if not user:
-            if username:
-                user = User.objects.get(username=username)
-            else:
-                raise ValidationError(
-                    "Save error! Provide user or the username of the current user in `username` argument"
-                )
-        if not self.is_dirty(check_relationship=True) and not self.is_deleted:
-
-            now = py_datetime.now()
-            self.date_updated = now
-            self.user_updated = user
-            self.version = self.version + 1
-            self.is_deleted = True
-            # check if we have business model
-            if hasattr(self, "replacement_uuid"):
-                # When a replacement entity is deleted, the link should be removed
-                # from replaced entity so a new replacement could be generated
-                replaced_entity = self.__class__.objects.filter(
-                    replacement_uuid=self.id
-                ).first()
-                if replaced_entity:
-                    replaced_entity.replacement_uuid = None
-                    replaced_entity.save(user=user)
-            result = super(HistoryModel, self).save(*args, **kwargs)
-            self.update_cache()
-            return result
-        else:
-            raise ValidationError(
-                "Record has not be deactivating, the object is different and must be updated before deactivating"
-            )
-
-    def copy(self, exclude_fields=["id", "uuid"]):
-        """
-        Creates a copy of a Django model instance, excluding specified fields (default: 'id' and 'uuid').
-        Args:
-            exclude_fields: List of field names to exclude from copying (default: ['id', 'uuid'])
-        Returns:
-            A new unsaved instance with copied attributes
-        """
-        model_class = self.__class__
-        new_instance = model_class()
-        fields = self._meta.get_fields()
-        for field in fields:
-            if field.name not in exclude_fields and hasattr(self, field.name):
-                if field.is_relation:
-                    if field.many_to_one or field.one_to_one:
-                        setattr(new_instance, field.name, getattr(self, field.name))
-                    elif field.one_to_many or field.many_to_many:
-                        continue
-                else:
-                    setattr(new_instance, field.name, getattr(self, field.name))
-
-        return new_instance
+    @classmethod
+    def filter_queryset(cls, queryset=None):
+        if queryset is None:
+            queryset = cls.objects.filter(is_deleted=False)
+        queryset = queryset.filter(is_deleted=False)
+        return queryset
 
     @classmethod
     def bulk_save(cls, data_list, user, batch_size=100):
@@ -244,9 +133,11 @@ class HistoryModel(DirtyFieldsMixin, CachedModelMixin, models.Model):
         to_create = []
         to_update = []
 
-        exclude_fields = {'id', 'uuid', 'date_created', 'user_created', 'date_updated',
-                         'user_updated', 'version', 'is_deleted', 'date_valid_from',
-                         'date_valid_to', 'replacement_uuid'}
+        exclude_fields = {
+            'id', 'uuid', 'date_created', 'user_created', 'date_updated',
+            'user_updated', 'version', 'is_deleted', 'date_valid_from',
+            'date_valid_to', 'replacement_uuid'
+        }
 
         for data in data_list:
             record_id = data.get('id')
@@ -276,25 +167,148 @@ class HistoryModel(DirtyFieldsMixin, CachedModelMixin, models.Model):
             updated_count = 0
 
             if to_create:
-                bulk_create_with_history(to_create, cls, batch_size=batch_size, default_user=user)
-                created_count = len(to_create)
+                created = bulk_create_with_history(to_create, cls, batch_size=batch_size, default_user=user)
+                cls.bulk_update_cache(created)
+                created_count = len(created)
 
             if to_update:
-                update_fields = [f for f in to_update[0].__dict__.keys()
-                                if not f.startswith('_') and f not in exclude_fields]
+                update_fields = [
+                    f for f in to_update[0].__dict__.keys()
+                    if not f.startswith('_') and f not in exclude_fields
+                ]
                 update_fields += ['user_updated', 'date_updated', 'version']
-
-                bulk_update_with_history(to_update, cls, update_fields, batch_size=batch_size, default_user=user)
-                updated_count = len(to_update)
+                updated_count = bulk_update_with_history(to_update, cls, update_fields, batch_size=batch_size, default_user=user)
+                cls.bulk_update_cache(to_update)
 
         return {'created': created_count, 'updated': updated_count}
+    
+    def save_history(self):
+        pass
 
-    @classmethod
-    def filter_queryset(cls, queryset=None):
-        if queryset is None:
-            queryset = cls.objects.all()
-        queryset = queryset.filter()
-        return queryset
+    def update(self, *args, user=None, username=None, save=True, **kwargs):
+        """
+        Overrides the default update to update the cache after saving the instance.
+        """
+        obj_data = kwargs.pop("data", {})
+        if not obj_data:
+            obj_data = kwargs
+            kwargs = {}
+        [setattr(self, key, obj_data[key]) for key in obj_data]
+        if save:
+            self.save(*args, user=user, username=user, **kwargs)
+        return self
+
+    def save(self, *args, user=None, username=None, **kwargs):
+        # get the user data so as to assign later his uuid id in fields user_updated etc
+        user = self.get_user(user=user, username=username)
+        now = py_datetime.now()
+        # check if object has been newly created
+        if self.id is None:
+            # save the new object
+            self.set_pk()
+            self.user_created = user
+            self.date_created = now
+            self.date_updated = now
+            self.user_updated = user
+            result = super().save(*args, **kwargs)
+            self.update_cache()
+            return result
+        if self.is_dirty(check_relationship=True):
+            if not self.user_created:
+                # past = self.objects.filter(pk=self.id).first()
+                # if not past:
+                self.user_created = user
+                self.date_created = now
+                # TODO this could erase a instance, version check might be too light
+                # elif not self.version == past.version:
+                #     raise ValidationError(
+                #         "Record has not be updated - the version don't match with existing record"
+                #     )
+            self.date_updated = now
+            self.user_updated = user
+            self.version = self.version + 1
+            # check if we have business model
+            if hasattr(self, "replacement_uuid"):
+                if (
+                    self.replacement_uuid is not None
+                    and "replacement_uuid" not in self.get_dirty_fields()
+                ):
+                    raise ValidationError(
+                        "Update error! You cannot update replaced entity"
+                    )
+            result = super().save(*args, **kwargs)
+            self.update_cache()
+            return result
+        else:
+            raise ValidationError(
+                "Record has not be updated - there are no changes in fields"
+            )
+
+    def delete_history(self):
+        pass
+
+    def get_user(self, user=None, username=None):
+        if not user:
+            user_id = 1
+            if username:
+                user = apps.get_model('core', 'User').objects.filter(username=username).first()
+            elif getattr(self, 'audit_user_id', None):
+                user_id = getattr(self, 'audit_user_id', None)
+                if user_id == -1:
+                    user_id = 1
+            if not user:
+                user = apps.get_model('core', 'User').objects.filter(i_user_id=user_id).first()
+            # if not user and not settings.IS_TESTING:
+            #     user = get_current_user()
+        return user
+
+    def delete(self, *args, user=None, username=None, **kwargs):
+        user = self.get_user(user=user, username=username)
+        if not self.is_dirty(check_relationship=True) and getattr(self, 'active', True):
+            now = py_datetime.now()
+            self.date_updated = now
+            self.user_updated = user
+            self.version = self.version + 1
+            self.active = False
+            # check if we have business model
+            if hasattr(self, "replacement_uuid"):
+                # When a replacement entity is deleted, the link should be removed
+                # from replaced entity so a new replacement could be generated
+                replaced_entity = self.__class__.objects.filter(
+                    replacement_uuid=self.id
+                ).first()
+                if replaced_entity:
+                    replaced_entity.replacement_uuid = None
+                    replaced_entity.save(user=user)
+            result = super().save(*args, **kwargs)
+            return result
+        else:
+            raise ValidationError(
+                "Record has not be deactivated, the object is different and must be updated before deactivating"
+            )
+
+    def copy(self, exclude_fields=["id", "uuid"]):
+        """
+        Creates a copy of a Django model instance, excluding specified fields (default: 'id' and 'uuid').
+        Args:
+            exclude_fields: List of field names to exclude from copying (default: ['id', 'uuid'])
+        Returns:
+            A new unsaved instance with copied attributes
+        """
+        model_class = self.__class__
+        new_instance = model_class()
+        fields = self._meta.get_fields()
+        for field in fields:
+            if field.name not in exclude_fields and hasattr(self, field.name):
+                if field.is_relation:
+                    if field.many_to_one or field.one_to_one:
+                        setattr(new_instance, field.name, getattr(self, field.name))
+                    elif field.one_to_many or field.many_to_many:
+                        continue
+                else:
+                    setattr(new_instance, field.name, getattr(self, field.name))
+
+        return new_instance
 
     class Meta:
         abstract = True
@@ -308,6 +322,7 @@ class HistoryBusinessModel(HistoryModel):
     )
 
     def replace_object(self, data, **kwargs):
+        from .user import User
         # check if object was created and saved in database (having date_created field)
         if self.id is None:
             return None
