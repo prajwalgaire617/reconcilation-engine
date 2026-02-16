@@ -1,7 +1,6 @@
 from django.test import TestCase
-from django.contrib.contenttypes.models import ContentType
 from unittest.mock import Mock, patch
-from core.abs_calculation_rule import AbsStrategy, AbsCalculationRule
+from core.abs_calculation_rule import AbsStrategy
 from core import datetime
 from datetime import timedelta
 
@@ -367,4 +366,3 @@ class AbsCalculationRuleRunCalculationRulesTest(TestCase):
 
         args = mock_get_linked.call_args[0]
         self.assertEqual(args[1], "PaymentPlan")
-

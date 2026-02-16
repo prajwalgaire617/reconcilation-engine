@@ -230,8 +230,6 @@ class gqlTest(openIMISGraphQLTestCase):
 
     def test_user_modification_creates_history_with_user(self):
         """Test that user modification via GraphQL creates history record with user included for audit"""
-        from core.models import InteractiveUser
-
         # Get initial history count for the admin user
         initial_history_count = self.admin_user.i_user.history.count()
 

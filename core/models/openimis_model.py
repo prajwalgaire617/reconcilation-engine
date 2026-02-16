@@ -2,13 +2,10 @@ from datetime import datetime as py_datetime
 from dirtyfields import DirtyFieldsMixin
 from django.core.exceptions import ValidationError
 from django.db.models import (
-    Q, UUIDField, DateTimeField, BooleanField, Model, IntegerField, ForeignKey,
-    BigAutoField, JSONField, deletion,
+    Q, UUIDField, DateTimeField, BooleanField, Model, IntegerField, BigAutoField, JSONField,
 )
 from simple_history.models import HistoricalRecords
-from django.conf import settings
-from core.utils import CachedManager, CachedModelMixin, filter_validity as core_filter_validity, uuidv7  
-from django.apps import apps
+from core.utils import CachedManager, CachedModelMixin, filter_validity as core_filter_validity, uuidv7
 from simple_history.utils import get_history_manager_for_model
 
 
@@ -76,8 +73,7 @@ class OpenIMISHistoryMixin(DirtyFieldsMixin, CachedModelMixin, Model):
         return self
 
     def save(self, *args, user=None, **kwargs):
-        # get the user data so as to assign later his uuid id in fields 
-        now = py_datetime.now()
+        # get the user data so as to assign later his uuid id in fields
         if user:
             self._history_user = user
         # check if object has been newly created

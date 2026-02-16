@@ -7,14 +7,12 @@ from django.core.exceptions import ValidationError
 from django.db import models, transaction
 from django.db.models import F
 from dirtyfields import DirtyFieldsMixin
-from core.utils import CachedManager, CachedModelMixin, filter_validity as core_filter_validity, uuidv7  
+from core.utils import CachedManager, CachedModelMixin, uuidv7
 from simple_history.utils import bulk_update_with_history, bulk_create_with_history
 from django.db.models import (
-    Q, UUIDField, DateTimeField, BooleanField, Model, IntegerField, ForeignKey,
-    BigAutoField, JSONField, deletion,
+    DateTimeField, Model, IntegerField,
 )
 from simple_history.models import HistoricalRecords
-from ..fields import DateTimeField
 from django.apps import apps
 
 logger = logging.getLogger(__name__)
@@ -52,7 +50,6 @@ class HistoryModel(DirtyFieldsMixin, CachedModelMixin, Model):
     )
     version = IntegerField(default=1)
 
-    
     id = models.UUIDField(
         primary_key=True, db_column="UUID", default=None, editable=False
     )
@@ -181,7 +178,7 @@ class HistoryModel(DirtyFieldsMixin, CachedModelMixin, Model):
                 cls.bulk_update_cache(to_update)
 
         return {'created': created_count, 'updated': updated_count}
-    
+
     def save_history(self):
         pass
 
