@@ -269,7 +269,11 @@ class InteractiveUser(OpenIMISMigrationModel):
 
     @property
     def is_superuser(self):
-        return self.is_imis_admin
+        user = User.objects.filter(username=self.login_name).first()
+        if user:
+            return user.is_superuser
+        else:
+            return self.is_imis_admin
 
     @property
     def rights(self):
@@ -338,14 +342,18 @@ class InteractiveUser(OpenIMISMigrationModel):
 
     @property
     def is_imis_admin(self):
+        """
+        Deprecated: Use is_superuser instead. This will be removed in a future version.
+        """
+        import warnings
+        warnings.warn("is_imis_admin is deprecated, use is_superuser instead", DeprecationWarning, stacklevel=2)
         is_admin = cache.get("is_admin_" + str(self.id))
         if is_admin is None:
             is_admin = Role.objects.filter(
+                *Role.filter_validity(),
+                *UserRole.filter_validity(prefix="user_roles__"),
                 is_system=64,
                 user_roles__user=self,
-                validity_to__isnull=True,
-                user_roles__validity_to__isnull=True,
-                user_roles__user__validity_to__isnull=True,
             ).exists()
             cache.set("is_admin_" + str(self.id), is_admin, 600)
         return is_admin
@@ -639,6 +647,7 @@ class User(UUIDModel, OpenIMISHistoryMixin, PermissionsMixin):
     USE_CACHE = not settings.IS_TESTING
     objects = CachedManager()
     username = models.CharField(unique=True, max_length=50)
+    is_superuser = models.BooleanField(default=False)
     t_user = models.ForeignKey(
         TechnicalUser, on_delete=models.CASCADE, blank=True, null=True
     )
@@ -720,9 +729,6 @@ class User(UUIDModel, OpenIMISHistoryMixin, PermissionsMixin):
     def is_staff(self):
         return self._u.is_staff
 
-    @property
-    def is_superuser(self):
-        return self._u.is_superuser
 
     @property
     def is_imis_admin(self):

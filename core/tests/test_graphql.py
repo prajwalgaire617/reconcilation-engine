@@ -308,3 +308,26 @@ class gqlTest(openIMISGraphQLTestCase):
         self.assertResponseNoErrors(response)
         content = json.loads(response.content)
         self.assertTrue(content["data"]["isValid"])
+
+    def test_admin_user_is_superuser(self):
+        # Test that the default "Admin" user has isSuperuser=True through GraphQL
+        query = """
+            query {
+                users(username: "Admin") {
+                    edges {
+                        node {
+                            username
+                            isSuperuser
+                        }
+                    }
+                }
+            }
+        """
+        response = self.query(query, headers={"HTTP_AUTHORIZATION": f"Bearer {self.admin_token}"})
+        self.assertResponseNoErrors(response)
+        content = json.loads(response.content)
+        users = content["data"]["users"]["edges"]
+        self.assertEqual(len(users), 1, "Should find exactly one Admin user")
+        admin_user = users[0]["node"]
+        self.assertEqual(admin_user["username"], "Admin")
+        self.assertTrue(admin_user["isSuperuser"], "Admin user should have isSuperuser=True")
