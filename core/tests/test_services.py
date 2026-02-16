@@ -75,12 +75,12 @@ class UserServicesTest(TestCase):
         )
         self.assertTrue(created)
         self.assertIsNotNone(i_user)
-        self.assertEquals(i_user.username, username)
-        self.assertEquals(i_user.last_name, "Last Name CIU1")
-        self.assertEquals(i_user.other_names, "Other 1 2 3")
-        self.assertEquals(i_user.user_roles.count(), 1)
-        self.assertEquals(i_user.user_roles.first().role_id, admin_role_id)
-        self.assertEquals(i_user.language.code, "en")
+        self.assertEqual(i_user.username, username)
+        self.assertEqual(i_user.last_name, "Last Name CIU1")
+        self.assertEqual(i_user.other_names, "Other 1 2 3")
+        self.assertEqual(i_user.user_roles.count(), 1)
+        self.assertEqual(i_user.user_roles.first().role_id, admin_role_id)
+        self.assertEqual(i_user.language.code, "en")
 
         UserRole.objects.filter(user_id=i_user.id).delete()
         deleted_users = InteractiveUser.objects.filter(login_name=username).delete()
@@ -107,16 +107,16 @@ class UserServicesTest(TestCase):
         )
         self.assertTrue(created)
         self.assertIsNotNone(i_user)
-        self.assertEquals(i_user.username, username)
-        self.assertEquals(i_user.last_name, "Last Name CIU2")
-        self.assertEquals(i_user.other_names, "Other 1 2 3")
-        self.assertEquals(i_user.user_roles.count(), 2)
-        self.assertEquals(
+        self.assertEqual(i_user.username, username)
+        self.assertEqual(i_user.last_name, "Last Name CIU2")
+        self.assertEqual(i_user.other_names, "Other 1 2 3")
+        self.assertEqual(i_user.user_roles.count(), 2)
+        self.assertEqual(
             list(i_user.user_roles.values_list("role_id", flat=True)), roles
         )
-        self.assertEquals(i_user.language.code, "fr")
-        self.assertEquals(i_user.phone, "+123456789")
-        self.assertEquals(i_user.email, f"{username}@illuminati.int")
+        self.assertEqual(i_user.language.code, "fr")
+        self.assertEqual(i_user.phone, "+123456789")
+        self.assertEqual(i_user.email, f"{username}@illuminati.int")
         self.assertIsNotNone(i_user.password)
         self.assertNotEqual(i_user.password, PASSWORD)  # No clear text password
         self.assertTrue(i_user.check_password(PASSWORD))
@@ -148,16 +148,16 @@ class UserServicesTest(TestCase):
         )
         self.assertTrue(created)
         self.assertIsNotNone(i_user)
-        self.assertEquals(i_user.username, username)
-        self.assertEquals(i_user.last_name, "Last Name CIU2")
-        self.assertEquals(i_user.other_names, "Other 1 2 3")
-        self.assertEquals(i_user.user_roles.count(), 2)
-        self.assertEquals(
+        self.assertEqual(i_user.username, username)
+        self.assertEqual(i_user.last_name, "Last Name CIU2")
+        self.assertEqual(i_user.other_names, "Other 1 2 3")
+        self.assertEqual(i_user.user_roles.count(), 2)
+        self.assertEqual(
             list(i_user.user_roles.values_list("role_id", flat=True)), roles
         )
-        self.assertEquals(i_user.language.code, "fr")
-        self.assertEquals(i_user.phone, "+123456789")
-        self.assertEquals(i_user.email, f"{username}@illuminati.int")
+        self.assertEqual(i_user.language.code, "fr")
+        self.assertEqual(i_user.phone, "+123456789")
+        self.assertEqual(i_user.email, f"{username}@illuminati.int")
         self.assertTrue(i_user.check_password(PASSWORD))
 
         # Core user necessary for the update
@@ -183,13 +183,13 @@ class UserServicesTest(TestCase):
         )
         self.assertFalse(created2)
         self.assertIsNotNone(i_user2)
-        self.assertEquals(i_user2.username, username)
-        self.assertEquals(i_user2.last_name, "Last updated")
-        self.assertEquals(i_user2.other_names, "Other updated")
-        self.assertEquals(
+        self.assertEqual(i_user2.username, username)
+        self.assertEqual(i_user2.last_name, "Last updated")
+        self.assertEqual(i_user2.other_names, "Other updated")
+        self.assertEqual(
             i_user2.user_roles.filter(validity_to__isnull=True).count(), 2
         )
-        self.assertEquals(
+        self.assertEqual(
             list(
                 i_user2.user_roles.filter(validity_to__isnull=True)
                 .order_by("role_id")
@@ -197,9 +197,9 @@ class UserServicesTest(TestCase):
             ),
             roles2,
         )
-        self.assertEquals(i_user2.language.code, "en")
-        self.assertEquals(i_user2.phone, "updated phone")
-        self.assertEquals(i_user2.email, f"{username}@updated.int")
+        self.assertEqual(i_user2.language.code, "en")
+        self.assertEqual(i_user2.phone, "updated phone")
+        self.assertEqual(i_user2.email, f"{username}@updated.int")
         self.assertTrue(i_user2.check_password(f"{PASSWORD}updated"))
 
         UserRole.objects.filter(user_id=i_user.id).delete()
@@ -227,7 +227,7 @@ class UserServicesTest(TestCase):
         )
         self.assertTrue(created)
         self.assertIsNotNone(i_user)
-        self.assertEquals(i_user.username, username)
+        self.assertEqual(i_user.username, username)
 
         i_user2, created2 = create_or_update_interactive_user(
             user_id=None,
@@ -243,9 +243,9 @@ class UserServicesTest(TestCase):
         )
         self.assertFalse(created2)
         self.assertIsNotNone(i_user2)
-        self.assertEquals(i_user2.username, username)
-        self.assertEquals(i_user2.last_name, "Last updated")
-        self.assertEquals(i_user2.other_names, "Other updated")
+        self.assertEqual(i_user2.username, username)
+        self.assertEqual(i_user2.last_name, "Last updated")
+        self.assertEqual(i_user2.other_names, "Other updated")
 
         UserRole.objects.filter(user_id=i_user.id).delete()
         deleted_users = InteractiveUser.objects.filter(login_name=username).delete()
@@ -266,10 +266,10 @@ class UserServicesTest(TestCase):
         )
         self.assertTrue(created)
         self.assertIsNotNone(officer)
-        self.assertEquals(officer.username, username)
-        self.assertEquals(officer.last_name, "Last Name O1")
-        self.assertEquals(officer.other_names, "Other 1 2 3")
-        self.assertEquals(officer.phone, "+12345678")
+        self.assertEqual(officer.username, username)
+        self.assertEqual(officer.last_name, "Last Name O1")
+        self.assertEqual(officer.other_names, "Other 1 2 3")
+        self.assertEqual(officer.phone, "+12345678")
 
         deleted_officers = Officer.objects.filter(code=username).delete()
         logger.info(f"Deleted {deleted_officers} officers after test")
@@ -299,17 +299,17 @@ class UserServicesTest(TestCase):
         officer.refresh_from_db()
         self.assertTrue(created)
         self.assertIsNotNone(officer)
-        self.assertEquals(officer.username, username)
-        self.assertEquals(officer.last_name, "Last Name O2")
-        self.assertEquals(officer.other_names, "Other 1 2 3")
-        self.assertEquals(officer.audit_user_id, 999)
+        self.assertEqual(officer.username, username)
+        self.assertEqual(officer.last_name, "Last Name O2")
+        self.assertEqual(officer.other_names, "Other 1 2 3")
+        self.assertEqual(officer.audit_user_id, 999)
         self.assertTrue(officer.has_login)
         self.assertTrue(officer.phone_communication)
-        self.assertEquals(officer.location_id, 1)
-        self.assertEquals(officer.substitution_officer_id, 1)
-        self.assertEquals(officer.address, "Multi\nline\naddress")
-        self.assertEquals(str(officer.works_to.date()), "2025-01-01")
-        self.assertEquals(
+        self.assertEqual(officer.location_id, 1)
+        self.assertEqual(officer.substitution_officer_id, 1)
+        self.assertEqual(officer.address, "Multi\nline\naddress")
+        self.assertEqual(str(officer.works_to.date()), "2025-01-01")
+        self.assertEqual(
             list(
                 OfficerVillage.objects.filter(validity_to__isnull=True, officer=officer)
                 .order_by("location_id")
@@ -317,8 +317,8 @@ class UserServicesTest(TestCase):
             ),
             sorted(village_ids),
         )
-        self.assertEquals(officer.phone, "+12345678")
-        self.assertEquals(officer.email, "imis@foo.be")
+        self.assertEqual(officer.phone, "+12345678")
+        self.assertEqual(officer.email, "imis@foo.be")
 
         deleted_officers = Officer.objects.filter(code=username).delete()
         logger.info(f"Deleted {deleted_officers} officers after test")
@@ -348,17 +348,17 @@ class UserServicesTest(TestCase):
         officer.refresh_from_db()
         self.assertTrue(created)
         self.assertIsNotNone(officer)
-        self.assertEquals(officer.username, username)
-        self.assertEquals(officer.last_name, "Last Name O2")
-        self.assertEquals(officer.other_names, "Other 1 2 3")
-        self.assertEquals(officer.audit_user_id, 999)
+        self.assertEqual(officer.username, username)
+        self.assertEqual(officer.last_name, "Last Name O2")
+        self.assertEqual(officer.other_names, "Other 1 2 3")
+        self.assertEqual(officer.audit_user_id, 999)
         self.assertTrue(officer.has_login)
         self.assertTrue(officer.phone_communication)
-        self.assertEquals(officer.location_id, 1)
-        self.assertEquals(officer.substitution_officer_id, 1)
-        self.assertEquals(officer.address, "Multi\nline\naddress")
-        self.assertEquals(str(officer.works_to.date()), "2025-01-01")
-        self.assertEquals(
+        self.assertEqual(officer.location_id, 1)
+        self.assertEqual(officer.substitution_officer_id, 1)
+        self.assertEqual(officer.address, "Multi\nline\naddress")
+        self.assertEqual(str(officer.works_to.date()), "2025-01-01")
+        self.assertEqual(
             list(
                 OfficerVillage.objects.filter(validity_to__isnull=True, officer=officer)
                 .order_by("location_id")
@@ -366,8 +366,8 @@ class UserServicesTest(TestCase):
             ),
             sorted(village_ids),
         )
-        self.assertEquals(officer.phone, "+12345678")
-        self.assertEquals(officer.email, "imis@foo.be")
+        self.assertEqual(officer.phone, "+12345678")
+        self.assertEqual(officer.email, "imis@foo.be")
 
         officer2, created = create_or_update_officer(
             user_id=None,
@@ -390,17 +390,17 @@ class UserServicesTest(TestCase):
         )
         self.assertFalse(created)
         self.assertIsNotNone(officer2)
-        self.assertEquals(officer2.username, username)
-        self.assertEquals(officer2.last_name, "Last updated")
-        self.assertEquals(officer2.other_names, "Other updated")
-        self.assertEquals(officer2.audit_user_id, 111)
+        self.assertEqual(officer2.username, username)
+        self.assertEqual(officer2.last_name, "Last updated")
+        self.assertEqual(officer2.other_names, "Other updated")
+        self.assertEqual(officer2.audit_user_id, 111)
         self.assertTrue(officer2.has_login)
         self.assertFalse(officer2.phone_communication)
-        self.assertEquals(officer2.location_id, 17)
+        self.assertEqual(officer2.location_id, 17)
         self.assertIsNone(officer2.substitution_officer_id)
-        self.assertEquals(officer2.address, "updated address")
-        self.assertEquals(str(officer2.works_to.date()), "2025-05-05")
-        self.assertEquals(
+        self.assertEqual(officer2.address, "updated address")
+        self.assertEqual(str(officer2.works_to.date()), "2025-05-05")
+        self.assertEqual(
             list(
                 OfficerVillage.objects.filter(
                     validity_to__isnull=True, officer=officer2
@@ -410,8 +410,8 @@ class UserServicesTest(TestCase):
             ),
             [self.test_village1.id],
         )
-        self.assertEquals(officer2.phone, "+00000")
-        self.assertEquals(officer2.email, "imis@bar.be")
+        self.assertEqual(officer2.phone, "+00000")
+        self.assertEqual(officer2.email, "imis@bar.be")
 
         deleted_officers = Officer.objects.filter(code=username).delete()
         logger.info(f"Deleted {deleted_officers} officers after test")
@@ -428,9 +428,9 @@ class UserServicesTest(TestCase):
         )
         self.assertTrue(created)
         self.assertIsNotNone(claim_admin)
-        self.assertEquals(claim_admin.username, username)
-        self.assertEquals(claim_admin.last_name, "Last Name CA1")
-        self.assertEquals(claim_admin.other_names, "Other 1 2 3")
+        self.assertEqual(claim_admin.username, username)
+        self.assertEqual(claim_admin.last_name, "Last Name CA1")
+        self.assertEqual(claim_admin.other_names, "Other 1 2 3")
 
         deleted_officers = Officer.objects.filter(code=username).delete()
         logger.info(f"Deleted {deleted_officers} officers after test")
@@ -453,14 +453,14 @@ class UserServicesTest(TestCase):
         )
         self.assertTrue(created)
         self.assertIsNotNone(claim_admin)
-        self.assertEquals(claim_admin.username, username)
-        self.assertEquals(claim_admin.last_name, "Last Name CA2")
-        self.assertEquals(claim_admin.other_names, "Other 1 2 3")
-        self.assertEquals(claim_admin.audit_user_id, 999)
+        self.assertEqual(claim_admin.username, username)
+        self.assertEqual(claim_admin.last_name, "Last Name CA2")
+        self.assertEqual(claim_admin.other_names, "Other 1 2 3")
+        self.assertEqual(claim_admin.audit_user_id, 999)
         self.assertTrue(claim_admin.has_login)
-        self.assertEquals(claim_admin.health_facility_id, self.test_hf.id)
-        self.assertEquals(claim_admin.phone, "+12345678")
-        self.assertEquals(claim_admin.email_id, "imis@foo.be")
+        self.assertEqual(claim_admin.health_facility_id, self.test_hf.id)
+        self.assertEqual(claim_admin.phone, "+12345678")
+        self.assertEqual(claim_admin.email_id, "imis@foo.be")
 
         deleted_officers = Officer.objects.filter(code=username).delete()
         logger.info(f"Deleted {deleted_officers} officers after test")
