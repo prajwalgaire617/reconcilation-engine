@@ -44,7 +44,7 @@ class GQLTest(TestCase):
         _ = self.to_camel_case_key(self._DATA_MUTATION_VARS["variables"]["input"])
         # create_or_update_interactive_user(self.user,data)
         # self.user=InteractiveUser.objects.filter(uuid = '28026414-f7dd-48fa-bedd-2f4cce9f9677').first()
-        # self.assertEquals(self.user.lastName, "Manal")
+        # self.assertEqual(self.user.lastName, "Manal")
 
     def to_camel_case_key(self, input):
         pattern = re.compile(r"(?<!^)(?=[A-Z]|[0-9]+)")

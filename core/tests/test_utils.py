@@ -34,37 +34,37 @@ class ComparableTest(TestCase):
 
         obj1 = A(f="a")
         obj2 = A(f="a")
-        self.assertEquals(obj1, obj2)
+        self.assertEqual(obj1, obj2)
         obj3 = B(f="b")
-        self.assertNotEquals(obj1, obj3)
+        self.assertNotEqual(obj1, obj3)
         obj4 = B(f="a")
-        self.assertNotEquals(obj1, obj4)
+        self.assertNotEqual(obj1, obj4)
 
 
 class UtilsTestCase(TestCase):
     def test_full_class_name(self):
-        self.assertEquals(full_class_name(self), "core.tests.test_utils.UtilsTestCase")
+        self.assertEqual(full_class_name(self), "core.tests.test_utils.UtilsTestCase")
 
-        self.assertEquals(full_class_name(1), "int")
+        self.assertEqual(full_class_name(1), "int")
 
     def test_json_serialize_value(self):
-        self.assertEquals(to_json_safe_value(42), 42)
-        self.assertEquals(to_json_safe_value("foo"), "foo")
+        self.assertEqual(to_json_safe_value(42), 42)
+        self.assertEqual(to_json_safe_value("foo"), "foo")
 
         uuid_obj = uuid.uuid4()
-        self.assertEquals(to_json_safe_value(uuid_obj), str(uuid_obj))
+        self.assertEqual(to_json_safe_value(uuid_obj), str(uuid_obj))
 
         date_obj = datetime.date(2025, 1, 1)
-        self.assertEquals(to_json_safe_value(date_obj), str(date_obj))
+        self.assertEqual(to_json_safe_value(date_obj), str(date_obj))
 
         ad_date_obj = AdDate(2025, 1, 1)
-        self.assertEquals(to_json_safe_value(ad_date_obj), str(ad_date_obj))
+        self.assertEqual(to_json_safe_value(ad_date_obj), str(ad_date_obj))
 
         ad_datetime_obj = AdDatetime(2025, 1, 1, 12, 0, 0)
-        self.assertEquals(to_json_safe_value(ad_datetime_obj), str(ad_datetime_obj))
+        self.assertEqual(to_json_safe_value(ad_datetime_obj), str(ad_datetime_obj))
 
         decimal_obj = decimal.Decimal("12345.6789")
-        self.assertEquals(to_json_safe_value(decimal_obj), str(decimal_obj))
+        self.assertEqual(to_json_safe_value(decimal_obj), str(decimal_obj))
 
     def test_is_admin_rights(self):
         role = Role.objects.filter(is_system=64, *Role.filter_validity()).first()
@@ -84,13 +84,13 @@ class UtilsTestCase(TestCase):
             .filter(role__is_system=64, *RoleRight.filter_validity(prefix="role__"))
             .distinct()
         ]
-        self.assertEquals(len(rights_db), 0, "all roleright are not removed")
-        self.assertEquals(
+        self.assertEqual(len(rights_db), 0, "all roleright are not removed")
+        self.assertEqual(
             len(rights),
             len(to_list_permissions()),
             "rights are not equal to all right available",
         )
-        self.assertNotEquals(
+        self.assertNotEqual(
             len(rights_db), len(rights),
             "admin should always get all permissions regardless of their RoleRight stored in DB"
         )
@@ -129,7 +129,7 @@ class UtilsTestCase(TestCase):
         users_0_filter = User.objects.filter(id=users_id[0]).first()
         # get 1 with cache
         users_1_filter = User.objects.filter(id=users_id[-1]).first()
-        self.assertEquals(
+        self.assertEqual(
             users_0_no_cache_get,
             users_0_filter,
             "get and filter should retrieve the same object",
@@ -140,7 +140,7 @@ class UtilsTestCase(TestCase):
         # get use from cache / partially from cache
         users_filter = list(User.objects.filter(id__in=users_id))
         users_0_filter = User.objects.filter(id=users_id[0]).first()
-        self.assertNotEquals(
+        self.assertNotEqual(
             users_0_no_cache_get.username,
             users_0_filter.username,
             "the object should be different, cache not invalidated properly",
@@ -150,7 +150,7 @@ class UtilsTestCase(TestCase):
         # remove user 1 from all user list (old and new)
         users.remove(users_0_no_cache_get)
         users_filter.remove(users_0_filter)
-        self.assertEquals(
+        self.assertEqual(
             sorted(users, key=lambda x: x.id),
             sorted(users_filter, key=lambda x: x.id),
             "should be the same list even if user_filter comes partially from cache",

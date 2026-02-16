@@ -36,7 +36,7 @@ class Migration(migrations.Migration):
             name="json_ext",
             field=models.JSONField(blank=True, db_column="Json_ext", null=True),
         ),
-       
+
         migrations.AddField(
             model_name="interactiveuser",
             name="version",
