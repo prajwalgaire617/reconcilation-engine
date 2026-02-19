@@ -262,7 +262,7 @@ class gqlTest(openIMISGraphQLTestCase):
         )
 
         # Get the latest history record
-        latest_history = self.admin_user.i_user.history.first()  # Ordered by -history_date, -history_id
+        latest_history = self.admin_user.i_user.history.latest('history_date') # Ordered by -history_date, -history_id
 
         # Verify that the history record contains the user who made the change
         self.assertIsNotNone(
