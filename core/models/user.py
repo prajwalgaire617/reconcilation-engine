@@ -24,7 +24,7 @@ from ..utils import CachedManager
 from .base import ExtendableModel, Language, UUIDModel
 from .versioned_model import VersionedModel
 from .openimis_model import OpenIMISMigrationModel, OpenIMISHistoryMixin  # , OpenIMISModel
-from core.utils import to_list_permissions
+from core.utils import to_list_permissions, filter_validity as core_filter_validity
 from rest_framework import exceptions
 
 logger = logging.getLogger(__name__)
@@ -659,8 +659,9 @@ class User(UUIDModel, OpenIMISHistoryMixin, PermissionsMixin):
 
     @staticmethod
     def filter_validity(arg="validity", prefix="", **kwargs):
-        return {}
-        return {}
+        if prefix:
+            return core_filter_validity(arg, prefix, **kwargs)
+        return []
 
     def check_password(self, *args, **kwargs):
         if self._u:

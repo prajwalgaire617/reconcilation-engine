@@ -228,6 +228,39 @@ class gqlTest(openIMISGraphQLTestCase):
         )
         self.assertResponseNoErrors(response)
 
+    def test_users_query_returns_interactive_users(self):
+        """Test that the users query returns users with interactive user links (i_user)."""
+        query = """
+            {
+                users(first: 10, orderBy: ["username"]) {
+                    totalCount
+                    edges {
+                        node {
+                            id
+                            username
+                        }
+                    }
+                }
+            }
+        """
+        response = self.query(
+            query, headers={"HTTP_AUTHORIZATION": f"Bearer {self.admin_token}"}
+        )
+        self.assertResponseNoErrors(response)
+        content = json.loads(response.content)
+        users_data = content["data"]["users"]
+        self.assertGreater(
+            users_data["totalCount"],
+            0,
+            "Users query should return at least one user (the admin user)"
+        )
+        usernames = [edge["node"]["username"] for edge in users_data["edges"]]
+        self.assertIn(
+            self.admin_username,
+            usernames,
+            f"Admin user '{self.admin_username}' should be in the returned users"
+        )
+
     def test_user_modification_creates_history_with_user(self):
         """Test that user modification via GraphQL creates history record with user included for audit"""
         # Get initial history count for the admin user
