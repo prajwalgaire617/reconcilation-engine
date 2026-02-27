@@ -20,10 +20,6 @@ from location.models import OfficerVillage
 from location.test_helpers import create_test_village, create_test_health_facility
 from core.test_helpers import (
     create_test_interactive_user,
-    create_manager_role,
-    create_enrolment_officer_role,
-    create_claim_admin_role,
-    create_accountant_role,
     create_admin_role,
 )
 logger = logging.getLogger(__file__)
@@ -57,7 +53,7 @@ class UserServicesTest(TestCase):
         self.test_hf2 = create_test_health_facility()
         self.user = create_test_interactive_user()
 
-    def test_iuser_min(self):
+    def test_create_iuser_required_fields_only(self):
         admin_role_id = create_admin_role().id
         roles = [admin_role_id]
         username = "tstsvciu1"
@@ -86,8 +82,8 @@ class UserServicesTest(TestCase):
         deleted_users = InteractiveUser.objects.filter(login_name=username).delete()
         logger.info(f"Deleted {deleted_users} users after test")
 
-    def test_iuser_max(self):
-        roles = [create_manager_role().id, create_enrolment_officer_role().id]
+    def test_create_iuser_with_optional_fields(self):
+        roles = [create_admin_role("TestRole1").id, create_admin_role("TestRole2").id]
         username = "tstsvciu2"
         i_user, created = create_or_update_interactive_user(
             user_id=None,
@@ -127,8 +123,8 @@ class UserServicesTest(TestCase):
         logger.info(f"Deleted {deleted_users} users after test")
 
     def test_iuser_update(self):
-        roles = [create_manager_role().id, create_enrolment_officer_role().id]
-        roles2 = [create_accountant_role().id, create_claim_admin_role().id]
+        roles = [create_admin_role("TestRole1").id, create_admin_role("TestRole2").id]
+        roles2 = [create_admin_role("TestRole3").id, create_admin_role("TestRole4").id]
         username = "tstsvciu2"
         i_user, created = create_or_update_interactive_user(
             user_id=None,
@@ -211,7 +207,7 @@ class UserServicesTest(TestCase):
         """
         This tests the update of a user without specifying a userId but with a username
         """
-        roles = [create_manager_role().id, create_enrolment_officer_role().id]
+        roles = [create_admin_role("TestRole1").id, create_admin_role("TestRole2").id]
         username = "tstsvciu3"
         i_user, created = create_or_update_interactive_user(
             user_id=None,
@@ -468,7 +464,7 @@ class UserServicesTest(TestCase):
     def test_user_reset_password(self):
         from django.core import mail
 
-        roles = [create_manager_role().id, create_enrolment_officer_role().id]
+        roles = [create_admin_role("TestRole1").id, create_admin_role("TestRole2").id]
         username = "user_reset"
         i_user, created = create_or_update_interactive_user(
             user_id=None,
@@ -507,7 +503,7 @@ class UserServicesTest(TestCase):
         i_user.delete()
 
     def test_user_set_password(self):
-        roles = [create_manager_role().id, create_enrolment_officer_role().id]
+        roles = [create_admin_role("TestRole1").id, create_admin_role("TestRole2").id]
         username = "user_set"
         i_user, created = create_or_update_interactive_user(
             user_id=None,
