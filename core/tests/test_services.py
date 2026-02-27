@@ -78,10 +78,6 @@ class UserServicesTest(TestCase):
         self.assertEqual(i_user.user_roles.first().role_id, admin_role_id)
         self.assertEqual(i_user.language.code, "en")
 
-        UserRole.objects.filter(user_id=i_user.id).delete()
-        deleted_users = InteractiveUser.objects.filter(login_name=username).delete()
-        logger.info(f"Deleted {deleted_users} users after test")
-
     def test_create_iuser_with_optional_fields(self):
         roles = [create_admin_role("TestRole1").id, create_admin_role("TestRole2").id]
         username = "tstsvciu2"
@@ -117,10 +113,6 @@ class UserServicesTest(TestCase):
         self.assertNotEqual(i_user.password, PASSWORD)  # No clear text password
         self.assertTrue(i_user.check_password(PASSWORD))
         self.assertFalse(i_user.check_password("wrong_password"))
-
-        UserRole.objects.filter(user_id=i_user.id).delete()
-        deleted_users = InteractiveUser.objects.filter(login_name=username).delete()
-        logger.info(f"Deleted {deleted_users} users after test")
 
     def test_iuser_update(self):
         roles = [create_admin_role("TestRole1").id, create_admin_role("TestRole2").id]
@@ -198,11 +190,6 @@ class UserServicesTest(TestCase):
         self.assertEqual(i_user2.email, f"{username}@updated.int")
         self.assertTrue(i_user2.check_password(f"{PASSWORD}updated"))
 
-        UserRole.objects.filter(user_id=i_user.id).delete()
-        core_user.delete()
-        deleted_users = InteractiveUser.objects.filter(login_name=username).delete()
-        logger.info(f"Deleted {deleted_users} users after test")
-
     def test_iuser_update_no_id(self):
         """
         This tests the update of a user without specifying a userId but with a username
@@ -243,10 +230,6 @@ class UserServicesTest(TestCase):
         self.assertEqual(i_user2.last_name, "Last updated")
         self.assertEqual(i_user2.other_names, "Other updated")
 
-        UserRole.objects.filter(user_id=i_user.id).delete()
-        deleted_users = InteractiveUser.objects.filter(login_name=username).delete()
-        logger.info(f"Deleted {deleted_users} users after test")
-
     def test_officer_min(self):
         username = "tstsvco1"
         officer, created = create_or_update_officer(
@@ -266,9 +249,6 @@ class UserServicesTest(TestCase):
         self.assertEqual(officer.last_name, "Last Name O1")
         self.assertEqual(officer.other_names, "Other 1 2 3")
         self.assertEqual(officer.phone, "+12345678")
-
-        deleted_officers = Officer.objects.filter(code=username).delete()
-        logger.info(f"Deleted {deleted_officers} officers after test")
 
     def test_officer_max(self):
         username = "tstsvco2"
@@ -315,9 +295,6 @@ class UserServicesTest(TestCase):
         )
         self.assertEqual(officer.phone, "+12345678")
         self.assertEqual(officer.email, "imis@foo.be")
-
-        deleted_officers = Officer.objects.filter(code=username).delete()
-        logger.info(f"Deleted {deleted_officers} officers after test")
 
     def test_officer_update(self):
         username = "tstsvco2"
@@ -409,8 +386,6 @@ class UserServicesTest(TestCase):
         self.assertEqual(officer2.phone, "+00000")
         self.assertEqual(officer2.email, "imis@bar.be")
 
-        deleted_officers = Officer.objects.filter(code=username).delete()
-        logger.info(f"Deleted {deleted_officers} officers after test")
 
     def test_claim_admin_min(self):
         username = "tstsvca1"
@@ -428,8 +403,6 @@ class UserServicesTest(TestCase):
         self.assertEqual(claim_admin.last_name, "Last Name CA1")
         self.assertEqual(claim_admin.other_names, "Other 1 2 3")
 
-        deleted_officers = Officer.objects.filter(code=username).delete()
-        logger.info(f"Deleted {deleted_officers} officers after test")
 
     def test_claim_admin_max(self):
         username = "tstsvca2"
@@ -458,8 +431,6 @@ class UserServicesTest(TestCase):
         self.assertEqual(claim_admin.phone, "+12345678")
         self.assertEqual(claim_admin.email_id, "imis@foo.be")
 
-        deleted_officers = Officer.objects.filter(code=username).delete()
-        logger.info(f"Deleted {deleted_officers} officers after test")
 
     def test_user_reset_password(self):
         from django.core import mail
@@ -496,12 +467,6 @@ class UserServicesTest(TestCase):
         self.assertTrue(len(mail.outbox) == 1)
         self.assertTrue(mail.outbox[0].subject == "[OpenIMIS] Reset Password")
 
-        UserRole.objects.filter(user_id=i_user.id).delete()
-        if connection.vendor == postgresql:
-            UserRole.objects.filter(user_id=core_user.id).delete()
-        core_user.delete()
-        i_user.delete()
-
     def test_user_set_password(self):
         roles = [create_admin_role("TestRole1").id, create_admin_role("TestRole2").id]
         username = "user_set"
@@ -531,9 +496,3 @@ class UserServicesTest(TestCase):
         request = self.factory.get("/")
         with self.assertRaises(ValidationError):
             set_user_password(request, username, "TOKEN", "new_password")
-
-        UserRole.objects.filter(user_id=i_user.id).delete()
-        if connection.vendor == postgresql:
-            UserRole.objects.filter(user_id=core_user.id).delete()
-        core_user.delete()
-        i_user.delete()
