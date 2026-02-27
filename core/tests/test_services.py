@@ -1,12 +1,11 @@
 import importlib
 import logging
+import datetime
 
-from django.db import connection
 from django.test.client import RequestFactory
 from django.apps import apps
-import datetime
 import core
-from core.models import InteractiveUser, Officer, UserRole, Language
+from core.models import Language
 from core.services import (
     create_or_update_interactive_user,
     create_or_update_core_user,
@@ -23,7 +22,6 @@ from core.test_helpers import (
     create_admin_role,
 )
 logger = logging.getLogger(__file__)
-postgresql = "postgresql"
 PASSWORD = "FoBoar72!"
 
 
@@ -386,7 +384,6 @@ class UserServicesTest(TestCase):
         self.assertEqual(officer2.phone, "+00000")
         self.assertEqual(officer2.email, "imis@bar.be")
 
-
     def test_claim_admin_min(self):
         username = "tstsvca1"
         claim_admin, created = create_or_update_claim_admin(
@@ -402,7 +399,6 @@ class UserServicesTest(TestCase):
         self.assertEqual(claim_admin.username, username)
         self.assertEqual(claim_admin.last_name, "Last Name CA1")
         self.assertEqual(claim_admin.other_names, "Other 1 2 3")
-
 
     def test_claim_admin_max(self):
         username = "tstsvca2"
@@ -430,7 +426,6 @@ class UserServicesTest(TestCase):
         self.assertEqual(claim_admin.health_facility_id, self.test_hf.id)
         self.assertEqual(claim_admin.phone, "+12345678")
         self.assertEqual(claim_admin.email_id, "imis@foo.be")
-
 
     def test_user_reset_password(self):
         from django.core import mail
