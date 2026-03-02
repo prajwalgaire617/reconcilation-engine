@@ -270,10 +270,7 @@ class InteractiveUser(OpenIMISMigrationModel):
     @property
     def is_superuser(self):
         user = User.objects.filter(username=self.login_name).first()
-        if user:
-            return user.is_superuser
-        else:
-            return self.is_imis_admin
+        return (user.is_superuser if user else False) or self.is_imis_admin
 
     @property
     def rights(self):

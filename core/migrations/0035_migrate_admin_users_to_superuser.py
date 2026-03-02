@@ -16,7 +16,10 @@ def migrate_admin_users_to_superuser(apps, schema_editor):
     ).distinct()
 
     for iu in admin_iusers:
-        user, created = User.objects.get_or_create(i_user=iu, username=iu.login_name)
+        user, created = User.objects.update_or_create(
+            i_user=iu,
+            defaults={"username": iu.login_name},
+        )
         user.is_superuser = True
         user.save()
 
