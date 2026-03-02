@@ -726,7 +726,6 @@ class User(UUIDModel, OpenIMISHistoryMixin, PermissionsMixin):
     def is_staff(self):
         return self._u.is_staff
 
-
     @property
     def is_imis_admin(self):
         # 64 is system number for IMIS Administrator

@@ -3,11 +3,11 @@
 from django.db import migrations, models
 from core.utils import filter_validity, uuidv7
 
+
 def migrate_admin_users_to_superuser(apps, schema_editor):
     InteractiveUser = apps.get_model('core', 'InteractiveUser')
     User = apps.get_model('core', 'User')
-    UserRole = apps.get_model('core', 'UserRole')
-    
+
     admin_iusers = InteractiveUser.objects.filter(
         *filter_validity(),
         *filter_validity(prefix="user_roles__"),
@@ -42,7 +42,7 @@ class Migration(migrations.Migration):
             name='is_superuser',
             field=models.BooleanField(default=False),
         ),
-                migrations.AddField(
+        migrations.AddField(
             model_name="historicaluser",
             name="is_superuser",
             field=models.BooleanField(default=False),
