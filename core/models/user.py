@@ -342,7 +342,6 @@ class InteractiveUser(OpenIMISMigrationModel):
         Deprecated: Use is_superuser instead. This will be removed in a future version.
         """
         import warnings
-        warnings.warn("is_imis_admin is deprecated, use is_superuser instead", DeprecationWarning, stacklevel=2)
         is_admin = cache.get("is_admin_" + str(self.id))
         if is_admin is None:
             is_admin = Role.objects.filter(
@@ -724,6 +723,10 @@ class User(UUIDModel, OpenIMISHistoryMixin, PermissionsMixin):
     @property
     def is_staff(self):
         return self._u.is_staff
+
+    @property
+    def is_superuser(self):
+        return self._u.is_superuser
 
     @property
     def is_imis_admin(self):
