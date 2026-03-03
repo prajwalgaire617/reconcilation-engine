@@ -269,8 +269,7 @@ class InteractiveUser(OpenIMISMigrationModel):
 
     @property
     def is_superuser(self):
-        user = User.objects.filter(username=self.login_name).first()
-        return (user.is_superuser if user else False) or self.is_imis_admin
+        return self.is_imis_admin
 
     @property
     def rights(self):
@@ -644,7 +643,7 @@ class User(UUIDModel, OpenIMISHistoryMixin, PermissionsMixin):
     USE_CACHE = not settings.IS_TESTING
     objects = CachedManager()
     username = models.CharField(unique=True, max_length=50)
-    is_superuser = models.BooleanField(default=False)
+    # is_superuser = models.BooleanField(default=False)
     t_user = models.ForeignKey(
         TechnicalUser, on_delete=models.CASCADE, blank=True, null=True
     )
