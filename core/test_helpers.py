@@ -362,7 +362,7 @@ def create_claim_admin_role():
     return create_test_role(perm_names=claim_admin_perms, name="ClaimAdministrator", is_system=16)
 
 
-def create_test_role(perm_names, name=None, is_system=0, is_blocked=False, custom_props=None):
+def create_test_role(perm_names=[], name=None, is_system=0, is_blocked=False, custom_props=None):
     """
     Create a test role with permissions specified by name as they appear in the module DEFAULT config.
 

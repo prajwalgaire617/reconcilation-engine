@@ -663,8 +663,7 @@ class User(UUIDModel, OpenIMISHistoryMixin, PermissionsMixin):
 
     @staticmethod
     def filter_validity(arg="validity", prefix="", **kwargs):
-        return {}
-        return {}
+        return []
 
     def check_password(self, *args, **kwargs):
         if self._u:

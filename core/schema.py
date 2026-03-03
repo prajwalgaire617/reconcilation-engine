@@ -1989,7 +1989,7 @@ def change_user_language(user, language_id):
             user__id=user.id, *InteractiveUser.filter_validity()
         ).first()
         updated_user.language_id = language_id
-        updated_user.save()
+        updated_user.save(user=user)
     except Exception as exc:
         logger.error(
             "[OpenIMISMutation] Failed to change user language for user %s: %s",

@@ -1,12 +1,11 @@
 import importlib
 import logging
+import datetime
 
-from django.db import connection
 from django.test.client import RequestFactory
 from django.apps import apps
-import datetime
 import core
-from core.models import InteractiveUser, Officer, UserRole, Language
+from core.models import Language
 from core.services import (
     create_or_update_interactive_user,
     create_or_update_core_user,
@@ -20,14 +19,9 @@ from location.models import OfficerVillage
 from location.test_helpers import create_test_village, create_test_health_facility
 from core.test_helpers import (
     create_test_interactive_user,
-    create_manager_role,
-    create_enrolment_officer_role,
-    create_claim_admin_role,
-    create_accountant_role,
-    create_admin_role,
+    create_test_role,
 )
 logger = logging.getLogger(__file__)
-postgresql = "postgresql"
 PASSWORD = "FoBoar72!"
 
 
@@ -57,9 +51,9 @@ class UserServicesTest(TestCase):
         self.test_hf2 = create_test_health_facility()
         self.user = create_test_interactive_user()
 
-    def test_iuser_min(self):
-        admin_role_id = create_admin_role().id
-        roles = [admin_role_id]
+    def test_create_iuser_required_fields_only(self):
+        role_id = create_test_role().id
+        roles = [role_id]
         username = "tstsvciu1"
         i_user, created = create_or_update_interactive_user(
             user_id=None,
@@ -79,15 +73,11 @@ class UserServicesTest(TestCase):
         self.assertEqual(i_user.last_name, "Last Name CIU1")
         self.assertEqual(i_user.other_names, "Other 1 2 3")
         self.assertEqual(i_user.user_roles.count(), 1)
-        self.assertEqual(i_user.user_roles.first().role_id, admin_role_id)
+        self.assertEqual(i_user.user_roles.first().role_id, role_id)
         self.assertEqual(i_user.language.code, "en")
 
-        UserRole.objects.filter(user_id=i_user.id).delete()
-        deleted_users = InteractiveUser.objects.filter(login_name=username).delete()
-        logger.info(f"Deleted {deleted_users} users after test")
-
-    def test_iuser_max(self):
-        roles = [create_manager_role().id, create_enrolment_officer_role().id]
+    def test_create_iuser_with_optional_fields(self):
+        roles = [create_test_role(name="TestRole1").id, create_test_role(name="TestRole2").id]
         username = "tstsvciu2"
         i_user, created = create_or_update_interactive_user(
             user_id=None,
@@ -122,13 +112,9 @@ class UserServicesTest(TestCase):
         self.assertTrue(i_user.check_password(PASSWORD))
         self.assertFalse(i_user.check_password("wrong_password"))
 
-        UserRole.objects.filter(user_id=i_user.id).delete()
-        deleted_users = InteractiveUser.objects.filter(login_name=username).delete()
-        logger.info(f"Deleted {deleted_users} users after test")
-
     def test_iuser_update(self):
-        roles = [create_manager_role().id, create_enrolment_officer_role().id]
-        roles2 = [create_accountant_role().id, create_claim_admin_role().id]
+        roles = [create_test_role(name="TestRole1").id, create_test_role(name="TestRole2").id]
+        roles2 = [create_test_role(name="TestRole3").id, create_test_role(name="TestRole4").id]
         username = "tstsvciu2"
         i_user, created = create_or_update_interactive_user(
             user_id=None,
@@ -202,16 +188,11 @@ class UserServicesTest(TestCase):
         self.assertEqual(i_user2.email, f"{username}@updated.int")
         self.assertTrue(i_user2.check_password(f"{PASSWORD}updated"))
 
-        UserRole.objects.filter(user_id=i_user.id).delete()
-        core_user.delete()
-        deleted_users = InteractiveUser.objects.filter(login_name=username).delete()
-        logger.info(f"Deleted {deleted_users} users after test")
-
     def test_iuser_update_no_id(self):
         """
         This tests the update of a user without specifying a userId but with a username
         """
-        roles = [create_manager_role().id, create_enrolment_officer_role().id]
+        roles = [create_test_role(name="TestRole1").id, create_test_role(name="TestRole2").id]
         username = "tstsvciu3"
         i_user, created = create_or_update_interactive_user(
             user_id=None,
@@ -247,10 +228,6 @@ class UserServicesTest(TestCase):
         self.assertEqual(i_user2.last_name, "Last updated")
         self.assertEqual(i_user2.other_names, "Other updated")
 
-        UserRole.objects.filter(user_id=i_user.id).delete()
-        deleted_users = InteractiveUser.objects.filter(login_name=username).delete()
-        logger.info(f"Deleted {deleted_users} users after test")
-
     def test_officer_min(self):
         username = "tstsvco1"
         officer, created = create_or_update_officer(
@@ -270,9 +247,6 @@ class UserServicesTest(TestCase):
         self.assertEqual(officer.last_name, "Last Name O1")
         self.assertEqual(officer.other_names, "Other 1 2 3")
         self.assertEqual(officer.phone, "+12345678")
-
-        deleted_officers = Officer.objects.filter(code=username).delete()
-        logger.info(f"Deleted {deleted_officers} officers after test")
 
     def test_officer_max(self):
         username = "tstsvco2"
@@ -319,9 +293,6 @@ class UserServicesTest(TestCase):
         )
         self.assertEqual(officer.phone, "+12345678")
         self.assertEqual(officer.email, "imis@foo.be")
-
-        deleted_officers = Officer.objects.filter(code=username).delete()
-        logger.info(f"Deleted {deleted_officers} officers after test")
 
     def test_officer_update(self):
         username = "tstsvco2"
@@ -413,9 +384,6 @@ class UserServicesTest(TestCase):
         self.assertEqual(officer2.phone, "+00000")
         self.assertEqual(officer2.email, "imis@bar.be")
 
-        deleted_officers = Officer.objects.filter(code=username).delete()
-        logger.info(f"Deleted {deleted_officers} officers after test")
-
     def test_claim_admin_min(self):
         username = "tstsvca1"
         claim_admin, created = create_or_update_claim_admin(
@@ -431,9 +399,6 @@ class UserServicesTest(TestCase):
         self.assertEqual(claim_admin.username, username)
         self.assertEqual(claim_admin.last_name, "Last Name CA1")
         self.assertEqual(claim_admin.other_names, "Other 1 2 3")
-
-        deleted_officers = Officer.objects.filter(code=username).delete()
-        logger.info(f"Deleted {deleted_officers} officers after test")
 
     def test_claim_admin_max(self):
         username = "tstsvca2"
@@ -462,13 +427,10 @@ class UserServicesTest(TestCase):
         self.assertEqual(claim_admin.phone, "+12345678")
         self.assertEqual(claim_admin.email_id, "imis@foo.be")
 
-        deleted_officers = Officer.objects.filter(code=username).delete()
-        logger.info(f"Deleted {deleted_officers} officers after test")
-
     def test_user_reset_password(self):
         from django.core import mail
 
-        roles = [create_manager_role().id, create_enrolment_officer_role().id]
+        roles = [create_test_role(name="TestRole1").id, create_test_role(name="TestRole2").id]
         username = "user_reset"
         i_user, created = create_or_update_interactive_user(
             user_id=None,
@@ -500,14 +462,8 @@ class UserServicesTest(TestCase):
         self.assertTrue(len(mail.outbox) == 1)
         self.assertTrue(mail.outbox[0].subject == "[OpenIMIS] Reset Password")
 
-        UserRole.objects.filter(user_id=i_user.id).delete()
-        if connection.vendor == postgresql:
-            UserRole.objects.filter(user_id=core_user.id).delete()
-        core_user.delete()
-        i_user.delete()
-
     def test_user_set_password(self):
-        roles = [create_manager_role().id, create_enrolment_officer_role().id]
+        roles = [create_test_role(name="TestRole1").id, create_test_role(name="TestRole2").id]
         username = "user_set"
         i_user, created = create_or_update_interactive_user(
             user_id=None,
@@ -535,9 +491,3 @@ class UserServicesTest(TestCase):
         request = self.factory.get("/")
         with self.assertRaises(ValidationError):
             set_user_password(request, username, "TOKEN", "new_password")
-
-        UserRole.objects.filter(user_id=i_user.id).delete()
-        if connection.vendor == postgresql:
-            UserRole.objects.filter(user_id=core_user.id).delete()
-        core_user.delete()
-        i_user.delete()
