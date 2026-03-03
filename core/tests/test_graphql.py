@@ -262,7 +262,7 @@ class gqlTest(openIMISGraphQLTestCase):
         )
 
         # Get the latest history record
-        latest_history = self.admin_user.i_user.history.first()  # Ordered by -history_date, -history_id
+        latest_history = self.admin_user.i_user.history.latest('history_date')  # Ordered by -history_date, -history_id
 
         # Verify that the history record contains the user who made the change
         self.assertIsNotNone(
@@ -282,3 +282,52 @@ class gqlTest(openIMISGraphQLTestCase):
             "fr",
             "User language should have been changed to French"
         )
+
+    def test_validate_username_existing(self):
+        # Test validateUsername with an existing username - should return False
+        query = """
+            query ($username: String!) {
+                isValid: validateUsername(username: $username)
+            }
+        """
+        variables = {"username": self.admin_username}
+        response = self.query(query, variables=variables, headers={"HTTP_AUTHORIZATION": f"Bearer {self.admin_token}"})
+        self.assertResponseNoErrors(response)
+        content = json.loads(response.content)
+        self.assertFalse(content["data"]["isValid"])
+
+    def test_validate_username_non_existing(self):
+        # Test validateUsername with a non-existing username - should return True
+        query = """
+            query ($username: String!) {
+                isValid: validateUsername(username: $username)
+            }
+        """
+        variables = {"username": "nonexistingusername123"}
+        response = self.query(query, variables=variables, headers={"HTTP_AUTHORIZATION": f"Bearer {self.admin_token}"})
+        self.assertResponseNoErrors(response)
+        content = json.loads(response.content)
+        self.assertTrue(content["data"]["isValid"])
+
+    # def test_admin_user_is_superuser(self):
+    #     # Test that the default "Admin" user has isSuperuser=True through GraphQL
+    #     query = """
+    #         query {
+    #             users(username: "Admin") {
+    #                 edges {
+    #                     node {
+    #                         username
+    #                         isSuperuser
+    #                     }
+    #                 }
+    #             }
+    #         }
+    #     """
+    #     response = self.query(query, headers={"HTTP_AUTHORIZATION": f"Bearer {self.admin_token}"})
+    #     self.assertResponseNoErrors(response)
+    #     content = json.loads(response.content)
+    #     users = content["data"]["users"]["edges"]
+    #     self.assertEqual(len(users), 1, "Should find exactly one Admin user")
+    #     admin_user = users[0]["node"]
+    #     self.assertEqual(admin_user["username"], "Admin")
+    #     self.assertTrue(admin_user["isSuperuser"], "Admin user should have isSuperuser=True")
