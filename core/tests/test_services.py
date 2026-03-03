@@ -19,7 +19,7 @@ from location.models import OfficerVillage
 from location.test_helpers import create_test_village, create_test_health_facility
 from core.test_helpers import (
     create_test_interactive_user,
-    create_admin_role,
+    create_test_role,
 )
 logger = logging.getLogger(__file__)
 PASSWORD = "FoBoar72!"
@@ -52,8 +52,8 @@ class UserServicesTest(TestCase):
         self.user = create_test_interactive_user()
 
     def test_create_iuser_required_fields_only(self):
-        admin_role_id = create_admin_role().id
-        roles = [admin_role_id]
+        role_id = create_test_role().id
+        roles = [role_id]
         username = "tstsvciu1"
         i_user, created = create_or_update_interactive_user(
             user_id=None,
@@ -73,11 +73,11 @@ class UserServicesTest(TestCase):
         self.assertEqual(i_user.last_name, "Last Name CIU1")
         self.assertEqual(i_user.other_names, "Other 1 2 3")
         self.assertEqual(i_user.user_roles.count(), 1)
-        self.assertEqual(i_user.user_roles.first().role_id, admin_role_id)
+        self.assertEqual(i_user.user_roles.first().role_id, role_id)
         self.assertEqual(i_user.language.code, "en")
 
     def test_create_iuser_with_optional_fields(self):
-        roles = [create_admin_role("TestRole1").id, create_admin_role("TestRole2").id]
+        roles = [create_test_role(name="TestRole1").id, create_test_role(name="TestRole2").id]
         username = "tstsvciu2"
         i_user, created = create_or_update_interactive_user(
             user_id=None,
@@ -113,8 +113,8 @@ class UserServicesTest(TestCase):
         self.assertFalse(i_user.check_password("wrong_password"))
 
     def test_iuser_update(self):
-        roles = [create_admin_role("TestRole1").id, create_admin_role("TestRole2").id]
-        roles2 = [create_admin_role("TestRole3").id, create_admin_role("TestRole4").id]
+        roles = [create_test_role(name="TestRole1").id, create_test_role(name="TestRole2").id]
+        roles2 = [create_test_role(name="TestRole3").id, create_test_role(name="TestRole4").id]
         username = "tstsvciu2"
         i_user, created = create_or_update_interactive_user(
             user_id=None,
@@ -192,7 +192,7 @@ class UserServicesTest(TestCase):
         """
         This tests the update of a user without specifying a userId but with a username
         """
-        roles = [create_admin_role("TestRole1").id, create_admin_role("TestRole2").id]
+        roles = [create_test_role(name="TestRole1").id, create_test_role(name="TestRole2").id]
         username = "tstsvciu3"
         i_user, created = create_or_update_interactive_user(
             user_id=None,
@@ -430,7 +430,7 @@ class UserServicesTest(TestCase):
     def test_user_reset_password(self):
         from django.core import mail
 
-        roles = [create_admin_role("TestRole1").id, create_admin_role("TestRole2").id]
+        roles = [create_test_role(name="TestRole1").id, create_test_role(name="TestRole2").id]
         username = "user_reset"
         i_user, created = create_or_update_interactive_user(
             user_id=None,
@@ -463,7 +463,7 @@ class UserServicesTest(TestCase):
         self.assertTrue(mail.outbox[0].subject == "[OpenIMIS] Reset Password")
 
     def test_user_set_password(self):
-        roles = [create_admin_role("TestRole1").id, create_admin_role("TestRole2").id]
+        roles = [create_test_role(name="TestRole1").id, create_test_role(name="TestRole2").id]
         username = "user_set"
         i_user, created = create_or_update_interactive_user(
             user_id=None,
