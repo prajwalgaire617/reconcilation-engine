@@ -24,7 +24,7 @@ from ..utils import CachedManager
 from .base import ExtendableModel, Language, UUIDModel
 from .versioned_model import VersionedModel
 from .openimis_model import OpenIMISMigrationModel, OpenIMISHistoryMixin  # , OpenIMISModel
-from core.utils import to_list_permissions, filter_validity as core_filter_validity
+from core.utils import to_list_permissions
 from rest_framework import exceptions
 
 logger = logging.getLogger(__name__)
