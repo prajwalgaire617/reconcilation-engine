@@ -182,6 +182,7 @@ class UserGQLType(DjangoObjectType):
     last_name = graphene.String()
     email = graphene.String()
     phone = graphene.String()
+    # is_superuser = graphene.Boolean()
 
     class Meta:
         model = User
