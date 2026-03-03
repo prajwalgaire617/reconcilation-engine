@@ -341,7 +341,7 @@ class InteractiveUser(OpenIMISMigrationModel):
         """
         Deprecated: Use is_superuser instead. This will be removed in a future version.
         """
-        import warnings
+        # import warnings
         is_admin = cache.get("is_admin_" + str(self.id))
         if is_admin is None:
             is_admin = Role.objects.filter(
