@@ -105,7 +105,7 @@ class HistoryModel(DirtyFieldsMixin, CachedModelMixin, Model):
         return queryset
 
     @classmethod
-    def bulk_save(cls, data_list, user, batch_size=100):
+    def bulk_save(cls, data_list, user, batch_size=100, include_deleted=False):
         """
         Efficiently update or create multiple instances based on 'id' field.
         All operations are atomic - either all succeed or all fail.
@@ -114,6 +114,7 @@ class HistoryModel(DirtyFieldsMixin, CachedModelMixin, Model):
             data_list: List of dicts with instance data (with or without 'id')
             user: User performing the operation
             batch_size: Number of records to process per batch
+            include_deleted: If True, includes soft-deleted records in the lookup and allows updating the `is_deleted` field
 
         Returns:
             dict with 'created' and 'updated' counts
@@ -125,16 +126,21 @@ class HistoryModel(DirtyFieldsMixin, CachedModelMixin, Model):
 
         ids_to_update = [d['id'] for d in data_list if d.get('id')]
 
-        existing = {obj.id: obj for obj in cls.objects.filter(id__in=ids_to_update, is_deleted=False)}
+        query_filter = {'id__in': ids_to_update}
+        if not include_deleted:
+            query_filter['is_deleted'] = False
+        existing = {obj.id: obj for obj in cls.objects.filter(**query_filter)}
 
         to_create = []
         to_update = []
 
         exclude_fields = {
             'id', 'uuid', 'date_created', 'user_created', 'date_updated',
-            'user_updated', 'version', 'is_deleted', 'date_valid_from',
+            'user_updated', 'version', 'date_valid_from',
             'date_valid_to', 'replacement_uuid'
         }
+        if not include_deleted:
+            exclude_fields.add('is_deleted')
 
         for data in data_list:
             record_id = data.get('id')
