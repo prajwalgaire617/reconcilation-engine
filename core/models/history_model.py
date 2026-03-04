@@ -114,7 +114,7 @@ class HistoryModel(DirtyFieldsMixin, CachedModelMixin, Model):
             data_list: List of dicts with instance data (with or without 'id')
             user: User performing the operation
             batch_size: Number of records to process per batch
-            include_deleted: If True, queries deleted records and allows updating is_deleted field
+            include_deleted: If True, includes soft-deleted records in the lookup and allows updating the `is_deleted` field
 
         Returns:
             dict with 'created' and 'updated' counts
