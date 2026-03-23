@@ -295,6 +295,9 @@ def user_authentication(request, username, password):
         else:
             logger.debug(f"Authentication failed for username: {username}")
             raise exceptions.AuthenticationFailed("INCORRECT_CREDENTIALS")
+    if not user:
+        logger.debug(f"Authentication failed for username: {username}")
+        raise exceptions.AuthenticationFailed("INCORRECT_CREDENTIALS")
     return user
 
 
