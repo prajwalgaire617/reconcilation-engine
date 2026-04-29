@@ -239,7 +239,8 @@ def create_or_update_core_user(
         user.officer = officer
     if claim_admin:
         user.claim_admin = claim_admin
-    user.save()
+    if user.is_dirty(check_relationship=True):
+        user.save()
     return user, created
 
 
