@@ -10,6 +10,8 @@ from cached_property import cached_property
 from django.db import models
 from django.db.models import Q, JSONField
 
+from core.module_config_registry import validate_module_configuration, reload_module_configuration
+
 # from core.datetimes.ad_datetime import datetime as py_datetime
 
 
@@ -90,6 +92,14 @@ class ModuleConfiguration(UUIDModel):
         import collections
 
         return json.loads(self.config, object_pairs_hook=collections.OrderedDict)
+
+    def clean(self):
+        validate_module_configuration(self)
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
+        reload_module_configuration(self)
 
     def __str__(self):
         return "%s [%s]" % (self.module, self.version)

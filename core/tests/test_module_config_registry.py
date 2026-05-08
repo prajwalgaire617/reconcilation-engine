@@ -1,7 +1,6 @@
 from django.core.exceptions import ValidationError
 from django.test import TestCase
 
-from core.forms import ModuleConfigurationForm
 from core.models import ModuleConfiguration
 from core.module_config_registry import (
     _validators,
@@ -70,7 +69,10 @@ class ModuleConfigRegistryTest(TestCase):
         self.assertEqual(calls, ["a"])
 
     def test_validate_propagates_validation_error(self):
-        register_validator("mod_x", lambda inst: (_ for _ in ()).throw(ValidationError("bad config")))
+        def bad_validator(instance):
+            raise ValidationError("bad config")
+
+        register_validator("mod_x", bad_validator)
         instance = ModuleConfiguration(module="mod_x", layer="be", version="1", config="{}")
 
         with self.assertRaises(ValidationError):
@@ -80,3 +82,24 @@ class ModuleConfigRegistryTest(TestCase):
         instance = ModuleConfiguration(module="unregistered", layer="be", version="1", config="{}")
         validate_module_configuration(instance)
         reload_module_configuration(instance)
+
+    def test_save_validates_before_persist(self):
+        def reject_all(instance):
+            raise ValidationError("blocked")
+
+        register_validator("save_test", reject_all)
+        mc = ModuleConfiguration(module="save_test", layer="be", version="1", config="{}")
+
+        with self.assertRaises(ValidationError):
+            mc.save()
+
+        self.assertFalse(ModuleConfiguration.objects.filter(pk=mc.pk).exists())
+
+    def test_save_reloads_after_persist(self):
+        reloaded = []
+        register_reloader("reload_test", lambda inst: reloaded.append(inst.module))
+
+        mc = ModuleConfiguration(module="reload_test", layer="be", version="1", config="{}")
+        mc.save()
+        self.assertEqual(reloaded, ["reload_test"])
+        mc.delete()
