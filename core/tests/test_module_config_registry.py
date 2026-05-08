@@ -1,0 +1,82 @@
+from django.core.exceptions import ValidationError
+from django.test import TestCase
+
+from core.forms import ModuleConfigurationForm
+from core.models import ModuleConfiguration
+from core.module_config_registry import (
+    _validators,
+    _reloaders,
+    _key,
+    register_validator,
+    register_reloader,
+    validate_module_configuration,
+    reload_module_configuration,
+)
+
+
+class ModuleConfigRegistryTest(TestCase):
+
+    def setUp(self):
+        self._saved_validators = dict(_validators)
+        self._saved_reloaders = dict(_reloaders)
+
+    def tearDown(self):
+        _validators.clear()
+        _validators.update(self._saved_validators)
+        _reloaders.clear()
+        _reloaders.update(self._saved_reloaders)
+
+    def test_register_validator(self):
+        fn = lambda instance: None
+        register_validator("test_module", fn)
+        self.assertIn(fn, _validators[_key("test_module")])
+
+    def test_register_reloader(self):
+        fn = lambda instance: None
+        register_reloader("test_module", fn)
+        self.assertIn(fn, _reloaders[_key("test_module")])
+
+    def test_no_duplicate_registration(self):
+        fn = lambda instance: None
+        register_validator("test_module", fn)
+        register_validator("test_module", fn)
+        self.assertEqual(_validators[_key("test_module")].count(fn), 1)
+
+    def test_layer_isolation(self):
+        fn_be = lambda instance: None
+        fn_fe = lambda instance: None
+        register_validator("test_module", fn_be, layer="be")
+        register_validator("test_module", fn_fe, layer="fe")
+        self.assertIn(fn_be, _validators[_key("test_module", "be")])
+        self.assertIn(fn_fe, _validators[_key("test_module", "fe")])
+        self.assertNotIn(fn_fe, _validators[_key("test_module", "be")])
+
+    def test_validate_calls_matching_validators(self):
+        calls = []
+        register_validator("mod_a", lambda inst: calls.append("a"))
+        register_validator("mod_b", lambda inst: calls.append("b"))
+
+        instance = ModuleConfiguration(module="mod_a", layer="be", version="1", config="{}")
+        validate_module_configuration(instance)
+        self.assertEqual(calls, ["a"])
+
+    def test_reload_calls_matching_reloaders(self):
+        calls = []
+        register_reloader("mod_a", lambda inst: calls.append("a"))
+        register_reloader("mod_b", lambda inst: calls.append("b"))
+
+        instance = ModuleConfiguration(module="mod_a", layer="be", version="1", config="{}")
+        reload_module_configuration(instance)
+        self.assertEqual(calls, ["a"])
+
+    def test_validate_propagates_validation_error(self):
+        register_validator("mod_x", lambda inst: (_ for _ in ()).throw(ValidationError("bad config")))
+        instance = ModuleConfiguration(module="mod_x", layer="be", version="1", config="{}")
+
+        with self.assertRaises(ValidationError):
+            validate_module_configuration(instance)
+
+    def test_no_validators_for_module_is_noop(self):
+        instance = ModuleConfiguration(module="unregistered", layer="be", version="1", config="{}")
+        validate_module_configuration(instance)
+        reload_module_configuration(instance)
