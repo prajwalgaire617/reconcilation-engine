@@ -13,6 +13,14 @@ from core.module_config_registry import (
 )
 
 
+def _noop(instance):
+    pass
+
+
+def _noop_alt(instance):
+    pass
+
+
 class ModuleConfigRegistryTest(TestCase):
 
     def setUp(self):
@@ -26,29 +34,24 @@ class ModuleConfigRegistryTest(TestCase):
         _reloaders.update(self._saved_reloaders)
 
     def test_register_validator(self):
-        def noop(instance): pass
-        register_validator("test_module", noop)
-        self.assertIn(noop, _validators[_key("test_module")])
+        register_validator("test_module", _noop)
+        self.assertIn(_noop, _validators[_key("test_module")])
 
     def test_register_reloader(self):
-        def noop(instance): pass
-        register_reloader("test_module", noop)
-        self.assertIn(noop, _reloaders[_key("test_module")])
+        register_reloader("test_module", _noop)
+        self.assertIn(_noop, _reloaders[_key("test_module")])
 
     def test_no_duplicate_registration(self):
-        def noop(instance): pass
-        register_validator("test_module", noop)
-        register_validator("test_module", noop)
-        self.assertEqual(_validators[_key("test_module")].count(noop), 1)
+        register_validator("test_module", _noop)
+        register_validator("test_module", _noop)
+        self.assertEqual(_validators[_key("test_module")].count(_noop), 1)
 
     def test_layer_isolation(self):
-        def noop_be(instance): pass
-        def noop_fe(instance): pass
-        register_validator("test_module", noop_be, layer="be")
-        register_validator("test_module", noop_fe, layer="fe")
-        self.assertIn(noop_be, _validators[_key("test_module", "be")])
-        self.assertIn(noop_fe, _validators[_key("test_module", "fe")])
-        self.assertNotIn(noop_fe, _validators[_key("test_module", "be")])
+        register_validator("test_module", _noop, layer="be")
+        register_validator("test_module", _noop_alt, layer="fe")
+        self.assertIn(_noop, _validators[_key("test_module", "be")])
+        self.assertIn(_noop_alt, _validators[_key("test_module", "fe")])
+        self.assertNotIn(_noop_alt, _validators[_key("test_module", "be")])
 
     def test_validate_calls_matching_validators(self):
         calls = []
