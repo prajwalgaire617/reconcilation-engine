@@ -1,3 +1,4 @@
+import copy
 import json
 import os
 import logging
@@ -62,11 +63,12 @@ class ModuleConfiguration(UUIDModel):
 
     @classmethod
     def get_or_default(cls, module, default, layer="be"):
+        defaults = copy.deepcopy(default)
         if bool(os.environ.get("NO_DATABASE", False)):
             logger.info(
                 "env NO_DATABASE set to True: ModuleConfiguration not loaded from db!"
             )
-            return default
+            return defaults
 
         try:
             now = py_datetime.now()  # can't use core config here...
@@ -77,16 +79,16 @@ class ModuleConfiguration(UUIDModel):
             ).first()
             if qs:
                 db_configuration = qs._cfg
-                return {**default, **db_configuration}
+                return {**defaults, **db_configuration}
             else:
                 logger.info("No %s configuration, using default!" % module)
-                return default
+                return defaults
         except Exception:
             logger.error(
                 "Failed to load %s configuration, using default!\n%s: %s"
                 % (module, sys.exc_info()[0].__name__, sys.exc_info()[1])
             )
-            return default
+            return defaults
 
     @cached_property
     def _cfg(self):
