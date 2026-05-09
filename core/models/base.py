@@ -97,7 +97,7 @@ class ModuleConfiguration(UUIDModel):
         validate_module_configuration(self)
 
     def save(self, *args, **kwargs):
-        self.full_clean()
+        self.clean()
         super().save(*args, **kwargs)
         reload_module_configuration(self)
 
