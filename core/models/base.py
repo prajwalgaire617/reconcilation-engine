@@ -7,6 +7,7 @@ import uuid
 from datetime import datetime as py_datetime
 import datetime as base_datetime
 from cached_property import cached_property
+from django.core.exceptions import ValidationError
 from django.db import models
 from django.db.models import Q, JSONField
 
@@ -94,6 +95,13 @@ class ModuleConfiguration(UUIDModel):
         return json.loads(self.config, object_pairs_hook=collections.OrderedDict)
 
     def clean(self):
+        super().clean()
+
+        try:
+            self._cfg
+        except (TypeError, json.JSONDecodeError) as e:
+            raise ValidationError({"config": f"Invalid JSON: {e}"})
+
         validate_module_configuration(self)
 
     def save(self, *args, **kwargs):

@@ -86,6 +86,12 @@ class ModuleConfigRegistryTest(TestCase):
         validate_module_configuration(instance)
         reload_module_configuration(instance)
 
+    def test_save_rejects_invalid_json(self):
+        mc = ModuleConfiguration(module="test", layer="be", version="1", config="{bad")
+        with self.assertRaises(ValidationError):
+            mc.save()
+        self.assertFalse(ModuleConfiguration.objects.filter(pk=mc.pk).exists())
+
     def test_save_validates_before_persist(self):
         def reject_all(instance):
             raise ValidationError("blocked")
