@@ -104,11 +104,12 @@ class ModuleConfigRegistryTest(TestCase):
 
         self.assertFalse(ModuleConfiguration.objects.filter(pk=mc.pk).exists())
 
-    def test_save_reloads_after_persist(self):
+    def test_save_reloads_after_commit(self):
         reloaded = []
         register_reloader("reload_test", lambda inst: reloaded.append(inst.module))
 
         mc = ModuleConfiguration(module="reload_test", layer="be", version="1", config="{}")
-        mc.save()
+        with self.captureOnCommitCallbacks(execute=True):
+            mc.save()
         self.assertEqual(reloaded, ["reload_test"])
         mc.delete()

@@ -8,7 +8,7 @@ from datetime import datetime as py_datetime
 import datetime as base_datetime
 from cached_property import cached_property
 from django.core.exceptions import ValidationError
-from django.db import models
+from django.db import models, transaction
 from django.db.models import Q, JSONField
 
 from core.module_config_registry import validate_module_configuration, reload_module_configuration
@@ -107,7 +107,7 @@ class ModuleConfiguration(UUIDModel):
     def save(self, *args, **kwargs):
         self.clean()
         super().save(*args, **kwargs)
-        reload_module_configuration(self)
+        transaction.on_commit(lambda: reload_module_configuration(self))
 
     def __str__(self):
         return "%s [%s]" % (self.module, self.version)
