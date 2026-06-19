@@ -1,40 +1,55 @@
 from rest_framework import serializers
-from ..models import PaymentBatch, PaymentItem, SOSYSPaymentLog, BankStatementRow, ReconciliationRecord
 
 
-class PaymentItemSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = PaymentItem
-        fields = ["id", "claim_id", "amount", "status", "gateway_reference", "created_at"]
+class PaymentItemSerializer(serializers.Serializer):
+    id = serializers.IntegerField(read_only=True)
+    claim_id = serializers.IntegerField()
+    amount = serializers.DecimalField(max_digits=12, decimal_places=2)
+    status = serializers.CharField(max_length=20)
+    gateway_reference = serializers.CharField(max_length=100, required=False, allow_blank=True)
+    created_at = serializers.DateTimeField(read_only=True)
 
 
-class PaymentBatchSerializer(serializers.ModelSerializer):
+class PaymentBatchSerializer(serializers.Serializer):
+    id = serializers.IntegerField(read_only=True)
+    batch_number = serializers.CharField(max_length=50)
+    status = serializers.CharField(max_length=20)
+    retry_count = serializers.IntegerField()
+    parent_batch_id = serializers.IntegerField(required=False, allow_null=True)
     items = PaymentItemSerializer(many=True, read_only=True)
-
-    class Meta:
-        model = PaymentBatch
-        fields = ["id", "batch_number", "status", "retry_count", "parent_batch", "items", "created_at"]
+    created_at = serializers.DateTimeField(read_only=True)
 
 
-class SOSYSLogSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = SOSYSPaymentLog
-        fields = ["id", "claim_id", "gateway_reference", "amount", "status", "response_payload", "created_at"]
+class SOSYSLogSerializer(serializers.Serializer):
+    id = serializers.IntegerField(read_only=True)
+    claim_id = serializers.IntegerField()
+    gateway_reference = serializers.CharField(max_length=100, required=False, allow_blank=True)
+    amount = serializers.DecimalField(max_digits=12, decimal_places=2)
+    status = serializers.CharField(max_length=20)
+    response_payload = serializers.JSONField()
+    created_at = serializers.DateTimeField(read_only=True)
 
 
-class BankStatementRowSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = BankStatementRow
-        fields = ["id", "claim_id", "transaction_id", "amount", "status", "settlement_date", "import_batch"]
+class BankStatementRowSerializer(serializers.Serializer):
+    id = serializers.IntegerField(read_only=True)
+    claim_id = serializers.IntegerField()
+    transaction_id = serializers.CharField(max_length=100)
+    amount = serializers.DecimalField(max_digits=12, decimal_places=2)
+    status = serializers.CharField(max_length=20)
+    settlement_date = serializers.DateField()
+    import_batch = serializers.CharField(max_length=50, required=False, allow_blank=True)
 
 
-class ReconciliationRecordSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = ReconciliationRecord
-        fields = [
-            "id", "claim_id", "gateway_status", "bank_status",
-            "gateway_amount", "bank_amount", "result", "reason", "created_at",
-        ]
+class ReconciliationRecordSerializer(serializers.Serializer):
+    id = serializers.IntegerField(read_only=True)
+    claim_id = serializers.IntegerField()
+    gateway_status = serializers.CharField(max_length=20, required=False, allow_blank=True)
+    bank_status = serializers.CharField(max_length=20, required=False, allow_blank=True)
+    gateway_amount = serializers.DecimalField(max_digits=12, decimal_places=2, required=False, allow_null=True)
+    bank_amount = serializers.DecimalField(max_digits=12, decimal_places=2, required=False, allow_null=True)
+    result = serializers.CharField(max_length=30)
+    reason = serializers.CharField(required=False, allow_blank=True)
+    created_at = serializers.DateTimeField(read_only=True)
 
 
 class RunReconciliationSerializer(serializers.Serializer):
@@ -57,3 +72,4 @@ class DashboardSerializer(serializers.Serializer):
     retry_count        = serializers.IntegerField()
     pending_batches    = serializers.IntegerField()
     reconciliation_rate = serializers.FloatField()
+    months_filter      = serializers.IntegerField()

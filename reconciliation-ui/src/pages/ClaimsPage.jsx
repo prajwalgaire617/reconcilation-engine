@@ -235,7 +235,7 @@ export default function ClaimsPage() {
 
   const [filterHospital, setFilterHospital] = useState("");
   const [filterStatus,   setFilterStatus]   = useState("");
-  const [filterMonths,   setFilterMonths]   = useState(3);
+  const [filterMonths,   setFilterMonths]   = useState(0);
   const [page,     setPage]     = useState(1);
   const [pageSize, setPageSize] = useState(20);
 
@@ -320,11 +320,13 @@ export default function ClaimsPage() {
 
       {/* Status quick-filter strip */}
       {meta.count > 0 && (
-        <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
+        <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap", alignItems: "center" }}>
           {[
-            { label: "PENDING", color: "#b45309", bg: "#fef3c7" },
-            { label: "DONE",    color: "#16a34a", bg: "#dcfce7" },
-            { label: "ERROR",   color: "#dc2626", bg: "#fee2e2" },
+            { label: "PENDING",   desc: "Not batched",        color: "#b45309", bg: "#fef3c7" },
+            { label: "BATCHED",   desc: "In batch, queued",   color: "#2563eb", bg: "#dbeafe" },
+            { label: "SUBMITTED", desc: "NCHL sent, pending", color: "#0891b2", bg: "#e0f2fe" },
+            { label: "DONE",      desc: "Reconciled",         color: "#16a34a", bg: "#dcfce7" },
+            { label: "ERROR",     desc: "Mismatch/failed",    color: "#dc2626", bg: "#fee2e2" },
           ].map(({ label, color, bg }) => (
             <button key={label} onClick={() => setFilterStatus(filterStatus === label ? "" : label)}
               style={{
@@ -361,12 +363,15 @@ export default function ClaimsPage() {
         <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)}
           style={{ padding: "7px 10px", borderRadius: 7, border: "1px solid var(--border)", fontSize: 13 }}>
           <option value="">All statuses</option>
-          <option value="PENDING">PENDING</option>
-          <option value="DONE">DONE</option>
-          <option value="ERROR">ERROR</option>
+          <option value="PENDING">PENDING — not batched</option>
+          <option value="BATCHED">BATCHED — in queue</option>
+          <option value="SUBMITTED">SUBMITTED — NCHL sent</option>
+          <option value="DONE">DONE — reconciled</option>
+          <option value="ERROR">ERROR — mismatch</option>
         </select>
         <select value={filterMonths} onChange={e => setFilterMonths(Number(e.target.value))}
           style={{ padding: "7px 10px", borderRadius: 7, border: "1px solid var(--border)", fontSize: 13 }}>
+          <option value={0}>All time</option>
           {[1, 3, 6, 12].map(m => <option key={m} value={m}>Last {m} month{m > 1 ? "s" : ""}</option>)}
         </select>
       </div>

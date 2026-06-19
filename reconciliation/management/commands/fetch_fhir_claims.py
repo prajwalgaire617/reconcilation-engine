@@ -9,8 +9,8 @@ fhir_claims table. Designed to run nightly (off-peak) via cron:
 Do NOT run this during peak hours — FHIR fetch blocks on external I/O.
 """
 from django.core.management.base import BaseCommand
-
-from reconciliation.repositories.fhir_repository import FHIRApiClient, FHIRClaimRepository
+from reconciliation.services.claim_service import ClaimService
+from reconciliation.dtos.claim import FetchClaimsCommand
 
 
 class Command(BaseCommand):
@@ -27,16 +27,14 @@ class Command(BaseCommand):
         self.stdout.write(f"Fetching FHIR claims (last {months} months)…")
 
         try:
-            dtos = FHIRApiClient().fetch_claims(months=months)
-        except ConnectionError as exc:
-            self.stderr.write(self.style.ERROR(f"FHIR fetch failed: {exc}"))
+            result = ClaimService().sync_fhir(FetchClaimsCommand(months=months))
+        except Exception as exc:
+            self.stderr.write(self.style.ERROR(f"FHIR sync failed: {exc}"))
             return
 
-        self.stdout.write(f"  Fetched {len(dtos)} claims from FHIR server.")
-
-        result = FHIRClaimRepository().upsert_all(dtos)
         self.stdout.write(self.style.SUCCESS(
-            f"  Created: {result['created']}  "
-            f"Updated: {result['updated']}  "
-            f"Skipped (zero amount): {result['skipped']}"
+            f"  Created: {result.created}  "
+            f"Updated: {result.updated}  "
+            f"Skipped (zero amount): {result.skipped}  "
+            f"Total fetched: {result.fetched}"
         ))

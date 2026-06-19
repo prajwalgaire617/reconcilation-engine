@@ -2,11 +2,16 @@ from django.urls import path
 from .views import (
     BatchAutoCreateView,
     BatchCreateView,
+    BatchDetailView,
     BatchListView,
+    ClaimTimelineView,
     DashboardSummaryView,
+    ExceptionListView,
     FHIRClaimFetchView,
     FHIRClaimListView,
     HospitalListView,
+    OpsActivityView,
+    OpsSummaryView,
     QueueCancelView,
     QueueEnqueueView,
     QueueExecuteView,
@@ -34,10 +39,11 @@ urlpatterns = [
     path("dashboard/summary", DashboardSummaryView.as_view(), name="dashboard-summary"),
 
     # Batches
-    path("batch/",            BatchListView.as_view(),        name="batch-list"),
-    path("batch/create",      BatchCreateView.as_view(),      name="batch-create"),
-    path("batch/auto-create", BatchAutoCreateView.as_view(),  name="batch-auto-create"),
-    path("batch/retry",       RetryBatchView.as_view(),       name="batch-retry"),
+    path("batch/",              BatchListView.as_view(),        name="batch-list"),
+    path("batch/create",        BatchCreateView.as_view(),      name="batch-create"),
+    path("batch/auto-create",   BatchAutoCreateView.as_view(),  name="batch-auto-create"),
+    path("batch/retry",         RetryBatchView.as_view(),       name="batch-retry"),
+    path("batch/<int:batch_id>/", BatchDetailView.as_view(),    name="batch-detail"),
 
     # FHIR claims
     path("claims/",           FHIRClaimListView.as_view(),  name="claims-list"),
@@ -50,4 +56,12 @@ urlpatterns = [
     path("queue/execute",               QueueExecuteView.as_view(), name="queue-execute"),
     path("queue/<int:queue_id>/cancel", QueueCancelView.as_view(),  name="queue-cancel"),
     path("queue/<int:queue_id>/move",   QueueMoveView.as_view(),    name="queue-move"),
+
+    # Operations Center (enterprise)
+    path("ops/summary",  OpsSummaryView.as_view(),  name="ops-summary"),
+    path("ops/activity", OpsActivityView.as_view(), name="ops-activity"),
+
+    # Claim timeline & exceptions (enterprise)
+    path("claim/<int:claim_id>/timeline", ClaimTimelineView.as_view(), name="claim-timeline"),
+    path("exceptions/",                   ExceptionListView.as_view(), name="exceptions-list"),
 ]

@@ -43,19 +43,19 @@ class Command(BaseCommand):
     def _seed_batch(self) -> PaymentBatch:
         batch = PaymentBatch.objects.create(batch_number="BATCH-DEMO-001", status="SUBMITTED")
         items = [
-            (101, "5000.00"),   # will be MATCHED
-            (102, "12500.00"),  # will be SETTLEMENT_PENDING (no bank record)
-            (103, "8750.00"),   # will be STATUS_MISMATCH (gw SUCCESS, bank FAILED)
-            (104, "3200.00"),   # will be INVESTIGATION_REQUIRED (gw FAILED, bank SUCCESS)
-            (105, "19000.00"),  # will be AMOUNT_MISMATCH
-            (106, "6400.00"),   # will be NOT_SENT (no SOSYS log)
+            (101, "5000.00", "SUCCESS"),   # will be MATCHED
+            (102, "12500.00", "SUCCESS"),  # will be SETTLEMENT_PENDING (no bank record)
+            (103, "8750.00", "SUCCESS"),   # will be STATUS_MISMATCH (gw SUCCESS, bank FAILED)
+            (104, "3200.00", "FAILED"),    # will be INVESTIGATION_REQUIRED (gw FAILED, bank SUCCESS)
+            (105, "19000.00", "SUCCESS"),  # will be AMOUNT_MISMATCH
+            (106, "6400.00", "PENDING"),   # will be NOT_SENT (no SOSYS log)
         ]
-        for claim_id, amount in items:
+        for claim_id, amount, status in items:
             PaymentItem.objects.create(
                 batch=batch,
                 claim_id=claim_id,
                 amount=Decimal(amount),
-                status="PENDING",
+                status=status,
             )
         return batch
 

@@ -3,7 +3,8 @@ import axios from "axios";
 const api = axios.create({ baseURL: "/api/v1" });
 
 // Dashboard
-export const getDashboard = () => api.get("/dashboard/summary").then(r => r.data);
+export const getDashboard = (months = 0) =>
+  api.get("/dashboard/summary", { params: months > 0 ? { months } : {} }).then(r => r.data);
 
 // Reconciliation
 export const getResults = () => api.get("/reconciliation/results").then(r => r.data);
@@ -25,6 +26,7 @@ export const fetchFHIRClaims = (months = 3) =>
 
 // Batch listing & creation
 export const getBatches = () => api.get("/batch/").then(r => r.data);
+export const getBatchDetail = (id) => api.get(`/batch/${id}/`).then(r => r.data);
 export const autoCreateBatches = (batchSize = 15, submitNow = false) =>
   api.post("/batch/auto-create", { batch_size: batchSize, submit_now: submitNow }).then(r => r.data);
 export const createBatches = (claimIds, batchSize = null, submitNow = true) =>
@@ -56,3 +58,12 @@ export const enqueueBatches = (batchIds, scheduledAt) =>
 export const executeQueue = () => api.post("/queue/execute").then(r => r.data);
 export const cancelQueueEntry = (id) => api.post(`/queue/${id}/cancel`).then(r => r.data);
 export const moveQueueEntry   = (id, direction) => api.post(`/queue/${id}/move`, { direction }).then(r => r.data);
+
+// Operations Center (enterprise)
+export const getOpsSummary  = () => api.get("/ops/summary").then(r => r.data);
+export const getOpsActivity = () => api.get("/ops/activity").then(r => r.data);
+
+// Claim timeline & exceptions (enterprise)
+export const getClaimTimeline = (id) => api.get(`/claim/${id}/timeline`).then(r => r.data);
+export const getExceptions    = (type = "") =>
+  api.get("/exceptions/", { params: type ? { type } : {} }).then(r => r.data);

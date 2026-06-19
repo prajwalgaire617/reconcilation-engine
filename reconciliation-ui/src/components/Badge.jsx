@@ -15,7 +15,9 @@ const STYLES = {
   // Batch / item statuses
   SUCCESS:                { color: "#16a34a", bg: "#dcfce7" },
   FAILED:                 { color: "#dc2626", bg: "#fee2e2" },
-  SUBMITTED:              { color: "#2563eb", bg: "#dbeafe" },
+  SUBMITTED:              { color: "#0891b2", bg: "#e0f2fe" },
+  BATCHED:                { color: "#2563eb", bg: "#dbeafe" },
+  PARTIAL_SUCCESS:        { color: "#7c3aed", bg: "#ede9fe" },
 };
 
 export default function Badge({ value }) {
