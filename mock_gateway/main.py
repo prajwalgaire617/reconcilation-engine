@@ -101,6 +101,7 @@ def _process_item(item: GatewayItem) -> dict:
 
     _transactions[txn_id] = result
     _transactions[gateway_ref] = result  # allow lookup by either key
+    _transactions[f"claim-{item.claim_id}"] = result
     return result
 
 
@@ -158,6 +159,31 @@ def get_transaction(transaction_id: str):
     )
 
 
+@app.get("/sosys/claim/{claim_id}")
+def get_sosys_claim(claim_id: int):
+    """Retrieve status from the dummy SOSYS system."""
+    key = f"claim-{claim_id}"
+    txn = _transactions.get(key)
+    if not txn:
+        raise HTTPException(status_code=404, detail=f"Claim {claim_id} not found in SOSYS records.")
+
+    # Map raw gateway status to SOSYS status (PASSED or FAILED)
+    status_map = {
+        "SUCCESS": "PASSED",
+        "FAILED": "FAILED",
+        "PARTIAL_SUCCESS": "PASSED",  # to trigger amount mismatch
+    }
+
+    return {
+        "claim_id": claim_id,
+        "status": status_map.get(txn["status"], "FAILED"),
+        "amount": txn["settled_amount"],
+        "transaction_id": txn["transaction_id"],
+        "processed_at": txn["processed_at"],
+    }
+
+
 @app.get("/health")
 def health():
-    return {"status": "ok", "batches": len(_batches), "transactions": len(_transactions) // 2}
+    return {"status": "ok", "batches": len(_batches), "transactions": len(_transactions) // 3}
+

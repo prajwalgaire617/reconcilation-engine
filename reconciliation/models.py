@@ -50,7 +50,9 @@ class ReconciliationResult(models.TextChoices):
 
 
 class PaymentBatch(models.Model):
-    batch_number = models.CharField(max_length=50, unique=True)
+    batch_number  = models.CharField(max_length=50, unique=True)
+    hospital_id   = models.CharField(max_length=200, blank=True, default="")
+    hospital_name = models.CharField(max_length=200, blank=True, default="")
     status = models.CharField(max_length=20, choices=BatchStatus.choices, default=BatchStatus.PENDING)
     parent_batch = models.ForeignKey(
         "self", null=True, blank=True, on_delete=models.SET_NULL, related_name="retry_batches"
@@ -84,16 +86,17 @@ class PaymentItem(models.Model):
 
 
 class SOSYSPaymentLog(models.Model):
-    claim_id = models.IntegerField(db_index=True)
-    gateway_reference = models.CharField(max_length=100, db_index=True)
+    claim_id = models.IntegerField(unique=True, db_index=True)  # one log per claim (latest)
+    gateway_reference = models.CharField(max_length=100, db_index=True, blank=True, default="")
     amount = models.DecimalField(max_digits=12, decimal_places=2)
-    status = models.CharField(max_length=20)
+    status = models.CharField(max_length=20)           # SUCCESS | FAILED
     response_payload = models.JSONField(default=dict)
     created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         db_table = "sosys_payment_logs"
-        ordering = ["-created_at"]
+        ordering = ["-updated_at"]
 
     def __str__(self):
         return f"SOSYS | Claim {self.claim_id} | {self.status}"
@@ -135,3 +138,28 @@ class ReconciliationRecord(models.Model):
 
     def __str__(self):
         return f"Recon | Claim {self.claim_id} | {self.result}"
+
+
+class QueueStatus(models.TextChoices):
+    QUEUED     = "QUEUED"
+    EXECUTING  = "EXECUTING"
+    COMPLETED  = "COMPLETED"
+    FAILED     = "FAILED"
+    CANCELLED  = "CANCELLED"
+
+
+class PaymentQueue(models.Model):
+    batch        = models.OneToOneField(PaymentBatch, on_delete=models.CASCADE, related_name="queue_entry")
+    position     = models.IntegerField(db_index=True)
+    scheduled_at = models.DateTimeField()
+    status       = models.CharField(max_length=20, choices=QueueStatus.choices, default=QueueStatus.QUEUED)
+    executed_at  = models.DateTimeField(null=True, blank=True)
+    notes        = models.TextField(blank=True, default="")
+    created_at   = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "payment_queue"
+        ordering = ["position", "scheduled_at"]
+
+    def __str__(self):
+        return f"Queue #{self.position} | Batch {self.batch.batch_number} | {self.scheduled_at:%Y-%m-%d %H:%M} | {self.status}"

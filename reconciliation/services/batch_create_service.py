@@ -11,7 +11,7 @@ NCHL failure handling:
 from collections import defaultdict
 from dataclasses import dataclass, field
 from decimal import Decimal
-from typing import List, Optional
+from typing import List, Optional  # noqa: F401 (Optional used in method signatures)
 import logging
 
 logger = logging.getLogger(__name__)
@@ -54,37 +54,65 @@ class BatchCreateService:
         self._batch_repo = batch_repo or PaymentBatchRepository()
         self._item_repo  = item_repo  or PaymentItemRepository()
 
-    def create_from_fhir_claims(self, fhir_claim_ids: List[int]) -> BatchCreateSummary:
+    def create_from_fhir_claims(
+        self,
+        fhir_claim_ids: List[int],
+        batch_size: Optional[int] = None,
+        submit_now: bool = True,
+    ) -> BatchCreateSummary:
         """
-        Load the selected FHIRClaim rows, group by hospital_id,
-        create one PaymentBatch per hospital, submit each to NCHL.
+        Load the selected FHIRClaim rows, group by hospital_id.
+
+        batch_size: if set, split each hospital's claims into chunks of that size.
+        submit_now: if False, batches are persisted as PENDING but NOT sent to NCHL.
+                    Use queue_service.enqueue() afterwards to schedule submission.
         """
         from ..repositories.fhir_repository import FHIRClaimRepository
         claims = FHIRClaimRepository().get_by_ids(fhir_claim_ids)
         if not claims:
             raise ValueError("No valid FHIR claims found for the provided IDs.")
 
-        # Group claims by hospital
         groups: dict[str, list] = defaultdict(list)
         for c in claims:
             groups[c.hospital_id].append(c)
 
         summary = BatchCreateSummary()
         for hospital_id, hospital_claims in groups.items():
-            result = self._create_hospital_batch(hospital_id, hospital_claims)
-            summary.batches.append(result)
+            if batch_size and batch_size > 0:
+                chunks = [
+                    hospital_claims[i: i + batch_size]
+                    for i in range(0, len(hospital_claims), batch_size)
+                ]
+                for chunk_idx, chunk in enumerate(chunks):
+                    result = self._create_hospital_batch(
+                        hospital_id, chunk, chunk_num=chunk_idx + 1, submit_now=submit_now
+                    )
+                    summary.batches.append(result)
+            else:
+                result = self._create_hospital_batch(hospital_id, hospital_claims, submit_now=submit_now)
+                summary.batches.append(result)
 
         return summary
 
-    def _create_hospital_batch(self, hospital_id: str, claims: list) -> BatchResult:
+    def _create_hospital_batch(
+        self, hospital_id: str, claims: list, chunk_num: int = 0, submit_now: bool = True
+    ) -> BatchResult:
         hospital_name = claims[0].hospital_name or hospital_id
-        batch_tag     = hospital_id.replace("/", "-").replace(" ", "_")[:20]
+        batch_tag     = hospital_id.replace("/", "-").replace(" ", "_")[:18]
         from django.utils.timezone import now
-        batch_number  = f"BATCH-{batch_tag}-{now().strftime('%Y%m%d%H%M%S')}"
+        import uuid
+        suffix        = f"-P{chunk_num}" if chunk_num else ""
+        rand_suffix   = uuid.uuid4().hex[:4].upper()
+        batch_number  = f"BATCH-{batch_tag}{suffix}-{now().strftime('%Y%m%d%H%M%S')}-{rand_suffix}"
+
         total_amount  = sum(c.amount for c in claims)
 
         # Persist the batch
-        batch = self._batch_repo.create(batch_number=batch_number)
+        batch = self._batch_repo.create(
+            batch_number=batch_number,
+            hospital_id=hospital_id,
+            hospital_name=hospital_name,
+        )
 
         # Persist payment items (one per claim)
         gateway_items = [
@@ -93,22 +121,25 @@ class BatchCreateService:
         ]
         self._item_repo.bulk_create(batch, gateway_items)
 
-        # Attempt NCHL submission
-        try:
-            response = self._gateway.submit_batch(batch_number, gateway_items)
-            self._update_items_from_response(batch, response.get("results", []))
-            self._batch_repo.update_status(batch, "SUBMITTED")
-            status = "SUBMITTED"
+        # Optionally submit to NCHL immediately
+        if not submit_now:
+            status = "PENDING"
             failure_reason = ""
-            logger.info("Batch %s submitted to NCHL OK (%d claims)", batch_number, len(claims))
-
-        except Exception as exc:
-            # NCHL gateway unavailable or returned an error — store failure, allow retry
-            failure_reason = str(exc)[:300]
-            self._mark_all_items_failed(batch, failure_reason)
-            self._batch_repo.update_status(batch, "FAILED")
-            status = "FAILED"
-            logger.warning("NCHL submission failed for %s: %s", batch_number, failure_reason)
+            logger.info("Batch %s created but NOT submitted (queued for later)", batch_number)
+        else:
+            try:
+                response = self._gateway.submit_batch(batch_number, gateway_items)
+                self._update_items_from_response(batch, response.get("results", []))
+                self._batch_repo.update_status(batch, "SUBMITTED")
+                status = "SUBMITTED"
+                failure_reason = ""
+                logger.info("Batch %s submitted to NCHL OK (%d claims)", batch_number, len(claims))
+            except Exception as exc:
+                failure_reason = str(exc)[:300]
+                self._mark_all_items_failed(batch, failure_reason)
+                self._batch_repo.update_status(batch, "FAILED")
+                status = "FAILED"
+                logger.warning("NCHL submission failed for %s: %s", batch_number, failure_reason)
 
         return BatchResult(
             hospital_id    = hospital_id,

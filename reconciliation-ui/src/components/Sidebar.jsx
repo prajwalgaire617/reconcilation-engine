@@ -1,93 +1,95 @@
+import { NavLink } from "react-router-dom";
+
 const NAV = [
-  { id: "dashboard", label: "Dashboard",        icon: "◈", sub: "Overview & metrics" },
-  { id: "claims",    label: "Claims",            icon: "⊞", sub: "FHIR · PENDING · DONE · ERROR" },
-  { id: "results",   label: "Reconciliation",    icon: "≡", sub: "All engine results" },
-  { id: "failed",    label: "Errors & Retries",  icon: "⚠", sub: "Problem claims" },
-  { id: "upload",    label: "Bank Statement",    icon: "↑", sub: "CSV / PDF import" },
-  { id: "flow",      label: "System Flow",       icon: "⬡", sub: "Architecture & rules" },
+  { to: "/dashboard", label: "Dashboard",       icon: "◈", sub: "Overview & live metrics" },
+  { to: "/claims",    label: "Claims",           icon: "⊞", sub: "FHIR claims · filter & batch" },
+  { to: "/batches",   label: "Batches",          icon: "📦", sub: "Hospital groups · auto-create" },
+  { to: "/queue",     label: "Payment Queue",    icon: "⏱", sub: "FIFO · schedule · execute" },
+  { to: "/results",   label: "Reconciliation",   icon: "≡", sub: "NCHL vs SOSYS results" },
+  { to: "/errors",    label: "Errors & Retries", icon: "⚠", sub: "Problem claims · retry" },
+  { to: "/upload",    label: "Bank Statement",   icon: "↑", sub: "CSV / PDF import" },
+  { to: "/flow",      label: "System Flow",      icon: "⬡", sub: "Architecture & rules" },
 ];
 
-export default function Sidebar({ active, onNav }) {
+export default function Sidebar() {
   return (
     <aside style={{
-      width: 224,
-      minHeight: "100vh",
-      background: "#0f172a",
-      display: "flex",
-      flexDirection: "column",
-      flexShrink: 0,
+      width: 228, minHeight: "100vh", background: "#0f172a",
+      display: "flex", flexDirection: "column", flexShrink: 0,
+      borderRight: "1px solid #1e293b",
     }}>
-      {/* Logo */}
-      <div style={{ padding: "24px 20px 18px" }}>
-        <div style={{ fontSize: 10, fontWeight: 700, color: "#475569", letterSpacing: "1.2px", textTransform: "uppercase", marginBottom: 4 }}>
-          OpenIMIS · SSF
+      {/* Brand */}
+      <div style={{ padding: "22px 20px 16px" }}>
+        <div style={{ fontSize: 9, fontWeight: 800, color: "#334155", letterSpacing: "1.5px", textTransform: "uppercase", marginBottom: 5 }}>
+          OpenIMIS · SSF Nepal
         </div>
-        <div style={{ fontSize: 15, fontWeight: 700, color: "#f1f5f9", lineHeight: 1.3 }}>
+        <div style={{ fontSize: 14, fontWeight: 700, color: "#f1f5f9", lineHeight: 1.3 }}>
           Payment Reconciliation
         </div>
-        <div style={{ marginTop: 5, fontSize: 11, color: "#334155" }}>
-          Automated · Bank-of-Truth
+        <div style={{ marginTop: 6, display: "flex", gap: 5, flexWrap: "wrap" }}>
+          {[
+            { label: "DONE",    color: "#4ade80", bg: "#14532d" },
+            { label: "PENDING", color: "#fbbf24", bg: "#451a03" },
+            { label: "ERROR",   color: "#f87171", bg: "#450a0a" },
+          ].map(s => (
+            <span key={s.label} style={{
+              fontSize: 9, fontWeight: 800, padding: "2px 6px", borderRadius: 10,
+              color: s.color, background: s.bg, letterSpacing: ".5px",
+            }}>{s.label}</span>
+          ))}
         </div>
       </div>
 
-      <div style={{ width: "100%", height: 1, background: "#1e293b" }} />
+      <div style={{ height: 1, background: "#1e293b", margin: "0 16px" }} />
 
-      {/* Status legend pills */}
-      <div style={{ padding: "12px 16px 8px", display: "flex", flexWrap: "wrap", gap: 5 }}>
-        {[
-          { label: "DONE",    color: "#16a34a", bg: "#14532d" },
-          { label: "PENDING", color: "#fbbf24", bg: "#451a03" },
-          { label: "ERROR",   color: "#f87171", bg: "#450a0a" },
-        ].map(s => (
-          <span key={s.label} style={{
-            fontSize: 10, fontWeight: 700, padding: "2px 7px", borderRadius: 12,
-            color: s.color, background: s.bg, letterSpacing: ".4px",
-          }}>
-            {s.label}
-          </span>
-        ))}
-      </div>
-
-      <div style={{ width: "100%", height: 1, background: "#1e293b", marginBottom: 4 }} />
-
-      {/* Nav items */}
-      <nav style={{ padding: "8px 10px", flex: 1 }}>
+      {/* Nav */}
+      <nav style={{ padding: "10px 8px", flex: 1, overflowY: "auto" }}>
         {NAV.map(item => (
-          <button
-            key={item.id}
-            onClick={() => onNav(item.id)}
-            style={{
+          <NavLink
+            key={item.to}
+            to={item.to}
+            end={item.to === "/dashboard"}
+            style={({ isActive }) => ({
               display: "flex",
               alignItems: "flex-start",
               gap: 10,
               width: "100%",
               padding: "9px 12px",
-              border: "none",
               borderRadius: 8,
-              background: active === item.id ? "#1e40af" : "transparent",
-              color: active === item.id ? "#ffffff" : "#94a3b8",
-              fontWeight: active === item.id ? 600 : 400,
+              background: isActive ? "#1e3a8a" : "transparent",
+              color: isActive ? "#ffffff" : "#94a3b8",
+              fontWeight: isActive ? 600 : 400,
               fontSize: 13,
-              textAlign: "left",
+              textDecoration: "none",
               marginBottom: 2,
               transition: "background .12s, color .12s",
-              cursor: "pointer",
+              borderLeft: isActive ? "3px solid #3b82f6" : "3px solid transparent",
+            })}
+            onMouseEnter={e => {
+              if (!e.currentTarget.classList.contains("active"))
+                e.currentTarget.style.background = "#1e293b";
             }}
-            onMouseEnter={e => { if (active !== item.id) e.currentTarget.style.background = "#1e293b"; }}
-            onMouseLeave={e => { if (active !== item.id) e.currentTarget.style.background = "transparent"; }}
+            onMouseLeave={e => {
+              if (!e.currentTarget.classList.contains("active"))
+                e.currentTarget.style.background = "transparent";
+            }}
           >
-            <span style={{ fontSize: 14, opacity: .85, marginTop: 1, flexShrink: 0 }}>{item.icon}</span>
+            <span style={{ fontSize: 15, opacity: .85, marginTop: 1, flexShrink: 0 }}>{item.icon}</span>
             <div>
               <div>{item.label}</div>
-              <div style={{ fontSize: 10, opacity: .55, marginTop: 1, fontWeight: 400 }}>{item.sub}</div>
+              <div style={{ fontSize: 10, opacity: .5, marginTop: 1, fontWeight: 400 }}>{item.sub}</div>
             </div>
-          </button>
+          </NavLink>
         ))}
       </nav>
 
-      <div style={{ padding: "14px 18px", fontSize: 10, color: "#1e293b", borderTop: "1px solid #1e293b", background: "#0c1422" }}>
-        <div style={{ color: "#334155" }}>Django · localhost:8000</div>
-        <div style={{ color: "#1e293b", marginTop: 2 }}>React · localhost:3000</div>
+      {/* Footer */}
+      <div style={{ padding: "12px 16px", borderTop: "1px solid #1e293b", background: "#080f1a" }}>
+        <div style={{ fontSize: 10, color: "#334155", lineHeight: 1.8 }}>
+          <div>Django · :8000</div>
+          <div>NCHL+SOSYS · :8001</div>
+          <div>React · :5173</div>
+        </div>
       </div>
     </aside>
   );

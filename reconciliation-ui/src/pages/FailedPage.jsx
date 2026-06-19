@@ -4,6 +4,7 @@ import { useFetch } from "../hooks/useFetch";
 import Table from "../components/Table";
 import Badge from "../components/Badge";
 import Spinner from "../components/Spinner";
+import Pagination from "../components/Pagination";
 
 const fmt = (v) => v == null ? "—" : "NPR " + Number(v).toLocaleString("en-IN");
 
@@ -34,6 +35,32 @@ const ISSUE_DESCRIPTIONS = {
   AMOUNT_MISMATCH:        "Amounts differ between gateway and bank. Partial settlement likely.",
   NOT_SENT:               "No gateway record. Claim was never submitted to NCHL.",
 };
+
+function FailedTable({ data }) {
+  const [page, setPage]         = useState(1);
+  const [pageSize, setPageSize] = useState(20);
+  const totalPages = Math.max(1, Math.ceil(data.length / pageSize));
+  const rows = data.slice((page - 1) * pageSize, page * pageSize);
+
+  return (
+    <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", overflow: "hidden" }}>
+      <div style={{ padding: "14px 18px", borderBottom: "1px solid var(--border)", background: data.length > 0 ? "#fff8f8" : undefined }}>
+        <span style={{ fontWeight: 600, fontSize: 13, color: data.length > 0 ? "var(--red)" : "var(--green)" }}>
+          {data.length > 0 ? `⚠  ${data.length} claim(s) require attention` : "✓ No problem claims"}
+        </span>
+      </div>
+      <Table columns={COLUMNS} rows={rows} emptyText="No problem claims — all matched!" />
+      <Pagination
+        page={page}
+        totalPages={totalPages}
+        total={data.length}
+        pageSize={pageSize}
+        onPageChange={setPage}
+        onPageSizeChange={(ps) => { setPageSize(ps); setPage(1); }}
+      />
+    </div>
+  );
+}
 
 export default function FailedPage() {
   const { data, loading, error, reload } = useFetch(getFailed);
@@ -117,16 +144,7 @@ export default function FailedPage() {
       {loading && <Spinner />}
       {error && <p style={{ color: "var(--red)" }}>Error: {error}</p>}
 
-      {data && (
-        <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", overflow: "hidden" }}>
-          <div style={{ padding: "14px 18px", borderBottom: "1px solid var(--border)", background: data.length > 0 ? "#fff8f8" : undefined }}>
-            <span style={{ fontWeight: 600, fontSize: 13, color: data.length > 0 ? "var(--red)" : "var(--green)" }}>
-              {data.length > 0 ? `⚠  ${data.length} claim(s) require attention` : "✓ No problem claims"}
-            </span>
-          </div>
-          <Table columns={COLUMNS} rows={data} emptyText="No problem claims — all matched!" />
-        </div>
-      )}
+      {data && <FailedTable data={data} />}
     </div>
   );
 }

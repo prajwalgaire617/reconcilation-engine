@@ -4,9 +4,12 @@ from ..models import PaymentBatch, PaymentItem, SOSYSPaymentLog, BankStatementRo
 
 
 class PaymentBatchRepository:
-    def create(self, batch_number: str, parent_batch_id: Optional[int] = None, retry_count: int = 0) -> PaymentBatch:
+    def create(self, batch_number: str, parent_batch_id: Optional[int] = None, retry_count: int = 0,
+               hospital_id: str = "", hospital_name: str = "") -> PaymentBatch:
         return PaymentBatch.objects.create(
             batch_number=batch_number,
+            hospital_id=hospital_id,
+            hospital_name=hospital_name,
             parent_batch_id=parent_batch_id,
             retry_count=retry_count,
         )

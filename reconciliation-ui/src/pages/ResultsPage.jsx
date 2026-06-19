@@ -4,6 +4,7 @@ import { useFetch } from "../hooks/useFetch";
 import Table from "../components/Table";
 import Badge from "../components/Badge";
 import Spinner from "../components/Spinner";
+import Pagination from "../components/Pagination";
 
 const ALL_RESULTS = ["All", "MATCHED", "SETTLEMENT_PENDING", "STATUS_MISMATCH", "INVESTIGATION_REQUIRED", "AMOUNT_MISMATCH", "NOT_SENT"];
 
@@ -20,16 +21,25 @@ const COLUMNS = [
   { key: "created_at",     label: "Run At",          render: (v) => v ? new Date(v).toLocaleString() : "—" },
 ];
 
+const PAGE_SIZE_DEFAULT = 20;
+
 export default function ResultsPage() {
   const { data, loading, error } = useFetch(getResults);
   const [filter, setFilter] = useState("All");
   const [search, setSearch] = useState("");
+  const [page, setPage]         = useState(1);
+  const [pageSize, setPageSize] = useState(PAGE_SIZE_DEFAULT);
 
-  const rows = (data || []).filter(r => {
+  const filtered = (data || []).filter(r => {
     if (filter !== "All" && r.result !== filter) return false;
     if (search && !String(r.claim_id).includes(search)) return false;
     return true;
   });
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const rows = filtered.slice((page - 1) * pageSize, page * pageSize);
+
+  function handleFilter(f) { setFilter(f); setPage(1); }
+  function handleSearch(v) { setSearch(v); setPage(1); }
 
   return (
     <div style={{ padding: "28px 32px", maxWidth: 1200 }}>
@@ -44,7 +54,7 @@ export default function ResultsPage() {
           type="text"
           placeholder="Search claim ID…"
           value={search}
-          onChange={e => setSearch(e.target.value)}
+          onChange={e => handleSearch(e.target.value)}
           style={{
             padding: "7px 12px", borderRadius: 7, border: "1px solid var(--border)",
             fontSize: 13, outline: "none", width: 160,
@@ -54,7 +64,7 @@ export default function ResultsPage() {
           {ALL_RESULTS.map(r => (
             <button
               key={r}
-              onClick={() => setFilter(r)}
+              onClick={() => handleFilter(r)}
               style={{
                 padding: "6px 12px",
                 borderRadius: 20,
@@ -79,10 +89,18 @@ export default function ResultsPage() {
         <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", overflow: "hidden" }}>
           <div style={{ padding: "14px 18px", borderBottom: "1px solid var(--border)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <span style={{ fontWeight: 600, fontSize: 13 }}>
-              Showing {rows.length} of {data.length} records
+              {filtered.length} records{filter !== "All" ? ` matching ${filter.replace(/_/g," ")}` : ""}
             </span>
           </div>
           <Table columns={COLUMNS} rows={rows} emptyText="No records match this filter." />
+          <Pagination
+            page={page}
+            totalPages={totalPages}
+            total={filtered.length}
+            pageSize={pageSize}
+            onPageChange={setPage}
+            onPageSizeChange={(ps) => { setPageSize(ps); setPage(1); }}
+          />
         </div>
       )}
     </div>

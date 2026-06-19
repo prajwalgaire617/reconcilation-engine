@@ -56,5 +56,7 @@ DATABASES = {
 STATIC_URL = "/static/"
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
-# Mock NCHL gateway URL
-NCHL_GATEWAY_URL = "http://localhost:8001"
+# External service URLs
+NCHL_GATEWAY_URL = "http://localhost:8001"   # Mock NCHL payment gateway
+SOSYS_URL        = "http://localhost:8001"   # Mock SOSYS confirmation endpoint (same server for demo)
+SOSYS_TIMEOUT    = 5                         # seconds

@@ -46,11 +46,14 @@ class RetryBatchSerializer(serializers.Serializer):
 
 
 class DashboardSerializer(serializers.Serializer):
-    total_claims = serializers.IntegerField()
-    total_amount = serializers.DecimalField(max_digits=14, decimal_places=2)
+    total_claims       = serializers.IntegerField()
+    batched_claims     = serializers.IntegerField()
+    reconciled_claims  = serializers.IntegerField()
+    total_amount       = serializers.DecimalField(max_digits=14, decimal_places=2)
     successful_payments = serializers.IntegerField()
-    failed_payments = serializers.IntegerField()
+    failed_payments    = serializers.IntegerField()
     pending_settlements = serializers.IntegerField()
-    amount_mismatches = serializers.IntegerField()
-    retry_count = serializers.IntegerField()
+    amount_mismatches  = serializers.IntegerField()
+    retry_count        = serializers.IntegerField()
+    pending_batches    = serializers.IntegerField()
     reconciliation_rate = serializers.FloatField()
