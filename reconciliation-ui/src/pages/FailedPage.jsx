@@ -58,9 +58,10 @@ export default function FailedPage() {
 
   return (
     <div style={{ padding: "28px 32px", maxWidth: 1200 }}>
-      <h1 style={{ fontSize: 22, fontWeight: 700, marginBottom: 4 }}>Problem Claims</h1>
+      <h1 style={{ fontSize: 22, fontWeight: 700, marginBottom: 4 }}>Errors &amp; Retries</h1>
       <p style={{ color: "var(--text-muted)", fontSize: 13, marginBottom: 24 }}>
-        Claims requiring manual action or retry. Bank statement is the source of truth.
+        Claims with <strong>ERROR</strong> status — bank statement shows a mismatch or missing record.
+        Bank statement is always the source of truth.
       </p>
 
       {/* Issue legend */}

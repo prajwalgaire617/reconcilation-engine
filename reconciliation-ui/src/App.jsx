@@ -1,5 +1,6 @@
 import { useState } from "react";
 import Sidebar from "./components/Sidebar";
+import ClaimsPage from "./pages/ClaimsPage";
 import DashboardPage from "./pages/DashboardPage";
 import ResultsPage from "./pages/ResultsPage";
 import FailedPage from "./pages/FailedPage";
@@ -8,6 +9,7 @@ import FlowPage from "./pages/FlowPage";
 
 const PAGES = {
   dashboard: DashboardPage,
+  claims:    ClaimsPage,
   results:   ResultsPage,
   failed:    FailedPage,
   upload:    UploadPage,

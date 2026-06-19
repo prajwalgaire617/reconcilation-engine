@@ -1,6 +1,30 @@
 from django.db import models
 
 
+class FHIRClaim(models.Model):
+    """Local cache of claims fetched from the FHIR R4 server."""
+
+    fhir_id         = models.CharField(max_length=100, unique=True, db_index=True)
+    claim_reference = models.CharField(max_length=200, blank=True)
+    patient_name    = models.CharField(max_length=200, blank=True)
+    patient_ref     = models.CharField(max_length=200, blank=True)
+    hospital_id     = models.CharField(max_length=200, db_index=True)
+    hospital_name   = models.CharField(max_length=200, blank=True)
+    amount          = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    currency        = models.CharField(max_length=10, default="NPR")
+    fhir_status     = models.CharField(max_length=50, default="active")
+    service_date    = models.DateField(null=True, blank=True)
+    fetched_at      = models.DateTimeField(auto_now_add=True)
+    last_synced     = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "fhir_claims"
+        ordering = ["-service_date", "hospital_id"]
+
+    def __str__(self):
+        return f"Claim/{self.fhir_id} | {self.hospital_name} | NPR {self.amount}"
+
+
 class BatchStatus(models.TextChoices):
     PENDING = "PENDING"
     SUBMITTED = "SUBMITTED"

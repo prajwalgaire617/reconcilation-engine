@@ -9,6 +9,17 @@ export const runReconciliation = (claimIds = null) =>
   api.post("/reconciliation/run", claimIds ? { claim_ids: claimIds } : {}).then(r => r.data);
 export const retryBatch = (batchId) =>
   api.post("/batch/retry", { batch_id: batchId }).then(r => r.data);
+// ── FHIR claims ───────────────────────────────────────────────────────────────
+export const getClaims = (params = {}) =>
+  api.get("/claims/", { params }).then(r => r.data);
+export const getHospitals = () =>
+  api.get("/claims/hospitals/").then(r => r.data);
+export const fetchFHIRClaims = (months = 3) =>
+  api.post("/claims/fetch", { months }).then(r => r.data);
+export const createBatches = (claimIds) =>
+  api.post("/batch/create", { claim_ids: claimIds }).then(r => r.data);
+
+// ── statement preview ─────────────────────────────────────────────────────────
 export const previewStatement = (file, type = "pdf") => {
   const form = new FormData();
   form.append("file", file);
